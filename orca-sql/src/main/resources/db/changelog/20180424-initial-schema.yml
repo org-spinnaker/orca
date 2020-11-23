@@ -17,7 +17,7 @@ databaseChangeLog:
             type: char(36)
         - column:
             name: application
-            type: varchar(255)
+            type: varchar(127)
             constraints:
               nullable: false
         - column:
@@ -157,7 +157,7 @@ databaseChangeLog:
               nullable: false
         - column:
             name: application
-            type: varchar(255)
+            type: varchar(127)
             constraints:
               nullable: false
         - column:
@@ -270,7 +270,7 @@ databaseChangeLog:
         columns:
         - column:
             name: id
-            type: varchar(255)
+            type: varchar(127)
             constraints:
               primaryKey: true
               nullable: false

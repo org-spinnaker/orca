@@ -26,8 +26,6 @@ import com.netflix.spinnaker.orca.applications.config.ApplicationConfig
 import com.netflix.spinnaker.orca.bakery.config.BakeryConfiguration
 import com.netflix.spinnaker.orca.clouddriver.config.CloudDriverConfiguration
 import com.netflix.spinnaker.orca.clouddriver.config.ClouddriverJobConfiguration
-import com.netflix.spinnaker.orca.config.CloudFoundryConfiguration
-import com.netflix.spinnaker.orca.config.GremlinConfiguration
 import com.netflix.spinnaker.orca.config.KeelConfiguration
 import com.netflix.spinnaker.orca.config.OrcaConfiguration
 import com.netflix.spinnaker.orca.config.PipelineTemplateConfiguration
@@ -82,8 +80,8 @@ import org.springframework.scheduling.annotation.EnableAsync
   WebhookConfiguration,
   KeelConfiguration,
   QosConfiguration,
-  CloudFoundryConfiguration,
-  GremlinConfiguration,
+//  CloudFoundryConfiguration,
+//  GremlinConfiguration,
   InterlinkConfiguration
 ])
 @ComponentScan([

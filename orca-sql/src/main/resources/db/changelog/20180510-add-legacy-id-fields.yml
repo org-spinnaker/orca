@@ -9,7 +9,7 @@ databaseChangeLog:
         columns:
         - column:
             name: legacy_id
-            type: varchar(500)
+            type: varchar(127)
             afterColumn: id
     - addColumn:
         tableName: orchestration_stages
@@ -17,7 +17,7 @@ databaseChangeLog:
         columns:
         - column:
             name: legacy_id
-            type: varchar(500)
+            type: varchar(127)
             afterColumn: id
     - addColumn:
         tableName: pipelines
@@ -25,7 +25,7 @@ databaseChangeLog:
         columns:
         - column:
             name: legacy_id
-            type: varchar(500)
+            type: varchar(127)
             afterColumn: id
     - addColumn:
         tableName: pipeline_stages
@@ -33,7 +33,7 @@ databaseChangeLog:
         columns:
         - column:
             name: legacy_id
-            type: varchar(500)
+            type: varchar(127)
             afterColumn: id
 
     rollback:
