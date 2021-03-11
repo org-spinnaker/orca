@@ -48,7 +48,6 @@ import java.util.Optional
 @EnableConfigurationProperties(OrcaSqlProperties::class)
 @Import(DefaultSqlConfiguration::class)
 @ComponentScan("com.netflix.spinnaker.orca.sql")
-
 class SqlConfiguration {
   @Bean
   fun liquibase(properties: SqlProperties): SpringLiquibase =

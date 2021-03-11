@@ -1341,6 +1341,8 @@ public class RedisExecutionRepository implements ExecutionRepository {
 
   private void storeStageInternal(RedisClientDelegate delegate, Stage stage, Boolean updateIndex) {
     String key = executionKey(stage);
+    // pipeline:01F0AGTN0259126CEDWTHJ3V5H:stageIndex
+    // orchestration:01F0AGTN0259126CEDWTHJ3V5H:stageIndex
     String indexKey = format("%s:stageIndex", key);
 
     Map<String, String> serializedStage = serializeStage(stage);
@@ -1432,6 +1434,15 @@ public class RedisExecutionRepository implements ExecutionRepository {
     return format("%s:%s", execution.getType(), execution.getId());
   }
 
+  /**
+   *
+   * @param stage
+   * @return
+   * <ul>
+   *   <li>when stage's {@link ExecutionType} is PIPELINE, return "pipeline:01F0AGTN0259126CEDWTHJ3V5H"</li>
+   *   <li>when stage's {@link ExecutionType} is ORCHESTRATION, return "orchestration:01F0AGTN0259126CEDWTHJ3V5H"</li>
+   * </ul>
+   */
   private String executionKey(Stage stage) {
     return format("%s:%s", stage.getExecution().getType(), stage.getExecution().getId());
   }

@@ -45,6 +45,44 @@ public class SavePipelineTask implements RetryableTask {
 
   @Autowired ObjectMapper objectMapper;
 
+  /**
+   * the whole pipeline config could be:
+   * <pre>
+   * {
+   *   "application": "ycc",
+   *   "name": "Save pipeline 'test'",
+   *   "stages": [{
+   *     "type": "savePipeline",
+   *     "pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ==",
+   *     "user": "anonymous"
+   *   }],
+   *   "trigger": {
+   *     "type": "manual",
+   *     "user": "anonymous",
+   *     "parameters": {},
+   *     "artifacts": [],
+   *     "expectedArtifacts": [],
+   *     "resolvedExpectedArtifacts": []
+   *   }
+   * }
+   * </pre>
+   * stage.pipeline is encoded(Base64.encoder.encodeToString), the initial data is as followings:
+   * <pre>
+   * {
+   *   "name": "test",
+   *   "stages": [],
+   *   "triggers": [],
+   *   "application": "ycc",
+   *   "limitConcurrent": true,
+   *   "keepWaitingPipelines": false,
+   *   "spelEvaluator": "v4",
+   *   "index": 19
+   * }
+   * </pre>
+   *
+   * @param stage
+   * @return
+   */
   @SuppressWarnings("unchecked")
   @Override
   public TaskResult execute(Stage stage) {
@@ -110,7 +148,7 @@ public class SavePipelineTask implements RetryableTask {
           (Map<String, Object>) objectMapper.readValue(response.getBody().in(), Map.class);
       outputs.put("pipeline.id", savedPipeline.get("id"));
     } catch (Exception e) {
-      log.error("Unable to deserialize saved pipeline, reason: ", e.getMessage());
+      log.error("Unable to deserialize saved pipeline, reason: {}", e.getMessage());
 
       if (pipeline.containsKey("id")) {
         outputs.put("pipeline.id", pipeline.get("id"));

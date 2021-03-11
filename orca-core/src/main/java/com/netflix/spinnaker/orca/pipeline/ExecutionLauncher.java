@@ -80,6 +80,37 @@ public class ExecutionLauncher {
     this.registry = registry;
   }
 
+  /**
+   * Start one execution according to pipeline configJson.<p/>
+   * Sample configJson value when create/save pipeline:
+   * <pre>
+   * {
+   *   "application": "ycc",
+   *   "name": "Save pipeline 'test'",
+   *   "stages": [{
+   *     "type": "savePipeline",
+   *     "pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ==",
+   *     "user": "anonymous",
+   *     "refId": "0",
+   *     "requisiteStageRefIds": []
+   *   }],
+   *   "trigger": {
+   *     "type": "manual",
+   *     "user": "anonymous",
+   *     "parameters": {},
+   *     "artifacts": [],
+   *     "expectedArtifacts": [],
+   *     "resolvedExpectedArtifacts": []
+   *   },
+   *   "origin": "api"
+   * }
+   * </pre>
+   *
+   * @param type
+   * @param configJson
+   * @return
+   * @throws Exception
+   */
   public Execution start(ExecutionType type, String configJson) throws Exception {
     final Execution execution = parse(type, configJson);
 
@@ -186,6 +217,81 @@ public class ExecutionLauncher {
     return executionRepository.retrieve(execution.getType(), execution.getId());
   }
 
+  /**
+   * Create one Execution object to execute.
+   *
+   * @param type
+   * @param configJson
+   * @return Sample json when create/save pipeline(go into parseOrchestration):
+   * <pre>
+   * {<br/>
+   *   "type": "ORCHESTRATION",<br/>
+   *   "id": "01EYMJ4RP3SC7YB9E9FBQRMQG8",<br/>
+   *   "application": "ycc",<br/>
+   *   "name": null,<br/>
+   *   "buildTime": 1613450339029,<br/>
+   *   "canceled": false,<br/>
+   *   "canceledBy": null,<br/>
+   *   "cancellationReason": null,<br/>
+   *   "limitConcurrent": false,<br/>
+   *   "keepWaitingPipelines": false,<br/>
+   *   "stages": [{<br/>
+   *     "id": "01EYMJ4RP48G4GJ70WGJDG5FQD",<br/>
+   *     "refId": "0",<br/>
+   *     "type": "savePipeline",<br/>
+   *     "name": "savePipeline",<br/>
+   *     "startTime": null,<br/>
+   *     "endTime": null,<br/>
+   *     "startTimeExpiry": null,<br/>
+   *     "status": "NOT_STARTED",<br/>
+   *     "context": {<br/>
+   *       "pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ==",<br/>
+   *       "user": "anonymous"<br/>
+   *     },<br/>
+   *     "outputs": {},<br/>
+   *     "tasks": [],<br/>
+   *     "syntheticStageOwner": null,<br/>
+   *     "parentStageId": null,<br/>
+   *     "requisiteStageRefIds": [],<br/>
+   *     "scheduledTime": null,<br/>
+   *     "lastModified": null<br/>
+   *   }],<br/>
+   *   "startTime": null,<br/>
+   *   "endTime": null,<br/>
+   *   "startTimeExpiry": null,<br/>
+   *   "status": "NOT_STARTED",<br/>
+   *   "authentication": {<br/>
+   *     "user": "anonymous",<br/>
+   *     "allowedAccounts": []<br/>
+   *   },<br/>
+   *   "paused": null,<br/>
+   *   "origin": "api",<br/>
+   *   "trigger": {<br/>
+   *     "type": "manual",<br/>
+   *     "correlationId": null,<br/>
+   *     "notifications": [],<br/>
+   *     "strategy": false,<br/>
+   *     "rebake": false,<br/>
+   *     "dryRun": false,<br/>
+   *     "user": "anonymous",<br/>
+   *     "parameters": {},<br/>
+   *     "artifacts": [],<br/>
+   *     "expectedArtifacts": [],<br/>
+   *     "resolvedExpectedArtifacts": []<br/>
+   *   },<br/>
+   *   "description": "Save pipeline 'test'",<br/>
+   *   "pipelineConfigId": null,<br/>
+   *   "source": null,<br/>
+   *   "notifications": [],<br/>
+   *   "initialConfig": {},<br/>
+   *   "systemNotifications": [],<br/>
+   *   "spelEvaluator": null,<br/>
+   *   "templateVariables": null,<br/>
+   *   "partition": null<br/>
+   * }
+   * </pre>
+   * @throws IOException
+   */
   private Execution parse(ExecutionType type, String configJson) throws IOException {
     if (type == PIPELINE) {
       return parsePipeline(configJson);
@@ -218,10 +324,47 @@ public class ExecutionLauncher {
         .build();
   }
 
+  /**
+   * Create Execution according to pipeline configJson, then initialize its fields.<p/>
+   * Sample configJson when create/save pipeline:
+   * <pre>
+   * {
+   *   "application": "ycc",
+   *   "name": "Save pipeline 'test'",
+   *   "stages": [{
+   *     "type": "savePipeline",
+   *     "pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ==",
+   *     "user": "anonymous",
+   *     "refId": "0",
+   *     "requisiteStageRefIds": []
+   *   }],
+   *   "trigger": {
+   *     "type": "manual",
+   *     "user": "anonymous",
+   *     "parameters": {},
+   *     "artifacts": [],
+   *     "expectedArtifacts": [],
+   *     "resolvedExpectedArtifacts": []
+   *   },
+   *   "origin": "api"
+   * }
+   * </pre>
+   *
+   * @param configJson
+   * @return
+   * @throws IOException
+   */
   private Execution parseOrchestration(String configJson) throws IOException {
     @SuppressWarnings("unchecked")
     Map<String, Serializable> config = objectMapper.readValue(configJson, Map.class);
+    /*
+    When orchestration created, three fields will be initialized:
+      type=ExecutionType.ORCHESTRATION
+      id=ID_GENERATOR.nextULID()
+      application=config's application
+     */
     Execution orchestration = Execution.newOrchestration(getString(config, "application"));
+    // initialize orchestration's description field
     if (config.containsKey("name")) {
       orchestration.setDescription(getString(config, "name"));
     }
@@ -229,8 +372,18 @@ public class ExecutionLauncher {
       orchestration.setDescription(getString(config, "description"));
     }
 
+    // initialize orchestration's stages field
+    /*
+    "stages": [{
+      "type": "savePipeline",
+      "pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ==",
+      "user": "anonymous",
+      "refId": "0",
+      "requisiteStageRefIds": []
+    }]
+     */
     for (Map<String, Object> context : getList(config, "stages")) {
-      String type = context.remove("type").toString();
+      String type = context.remove("type").toString();//i.e. savePipeline
 
       String providerType = getString(context, "providerType");
       if (providerType != null && !providerType.equals("aws") && !providerType.equals("titus")) {
@@ -242,7 +395,19 @@ public class ExecutionLauncher {
       orchestration.getStages().add(stage);
     }
 
+    // initialize orchestration's trigger and notifications field
+    /*
+    "trigger": {
+      "type": "manual",
+      "user": "anonymous",
+      "parameters": {},
+      "artifacts": [],
+      "expectedArtifacts": [],
+      "resolvedExpectedArtifacts": []
+    }
+     */
     if (config.get("trigger") != null) {
+      // DefaultTrigger when type is manual
       Trigger trigger = objectMapper.convertValue(config.get("trigger"), Trigger.class);
       orchestration.setTrigger(trigger);
       if (!trigger.getNotifications().isEmpty()) {
@@ -270,6 +435,13 @@ public class ExecutionLauncher {
     return parseBoolean(getString(map, key));
   }
 
+  /**
+   * Get key's value from map. If there's no key, return null
+   *
+   * @param map map data
+   * @param key the key you want to get its value from the map
+   * @return key's value or null
+   */
   private final String getString(Map<String, ?> map, String key) {
     return map.containsKey(key) ? map.get(key).toString() : null;
   }
@@ -279,6 +451,14 @@ public class ExecutionLauncher {
     return result == null ? emptyMap() : result;
   }
 
+  /**
+   * Get key's value from map, its value should be List<Map<String, Object>>.
+   * If there's no key, return emptyList().
+   *
+   * @param map map data
+   * @param key the key you want to get its value from the map
+   * @return key's value or emptyList()
+   */
   private final List<Map<String, Object>> getList(Map<String, ?> map, String key) {
     List<Map<String, Object>> result = (List<Map<String, Object>>) map.get(key);
     return result == null ? emptyList() : result;

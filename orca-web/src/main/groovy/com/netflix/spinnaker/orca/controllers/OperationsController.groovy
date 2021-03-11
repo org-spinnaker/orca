@@ -277,6 +277,21 @@ class OperationsController {
     if (!pipeline.trigger.user) {
       pipeline.trigger.user = AuthenticatedRequest.getSpinnakerUser().orElse("[anonymous]")
     }
+    /*now pipeline is:
+    {
+      "application": "ycc",
+      "name": "Save pipeline 'test'",
+      "stages":   [{
+        "type": "savePipeline",
+        "pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ==",
+        "user": "anonymous"
+      }],
+      "trigger": {
+        "type": "manual",
+        "user": "anonymous"
+      }
+    }
+     */
 
     if (buildService) {
       decorateBuildInfo(pipeline.trigger)
@@ -303,6 +318,22 @@ class OperationsController {
     if (!pipeline.trigger.parameters) {
       pipeline.trigger.parameters = [:]
     }
+    /*now pipeline is:
+    {
+      "application": "ycc",
+      "name": "Save pipeline 'test'",
+      "stages": [{
+        "type": "savePipeline",
+        "pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ==",
+        "user": "anonymous"
+      }],
+      "trigger": {
+        "type": "manual",
+        "user": "anonymous",
+        "parameters": {}
+      }
+    }
+     */
 
     if (pipeline.parameterConfig) {
       pipeline.parameterConfig.each {
@@ -313,6 +344,25 @@ class OperationsController {
     if (resolveArtifacts) {
       artifactUtils?.resolveArtifacts(pipeline)
     }
+    /*now pipeline is:
+    {
+      "application": "ycc",
+      "name": "Save pipeline 'test'",
+      "stages": [{
+        "type": "savePipeline",
+        "pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ==",
+        "user": "anonymous"
+      }],
+      "trigger": {
+        "type": "manual",
+        "user": "anonymous",
+        "parameters": {},
+        "artifacts": [],
+        "expectedArtifacts": [],
+        "resolvedExpectedArtifacts": []
+      }
+    }
+    */
   }
 
   @Deprecated
@@ -365,9 +415,37 @@ class OperationsController {
     startTask(execution)
   }
 
+  /**
+   * create/save pipeline:
+   * <pre>
+   * {
+   *   "application": "ycc",
+   *   "description": "Save pipeline 'test'",
+   *   "job": [{
+   *     "pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ==",
+   *     "type": "savePipeline",
+   *     "user": "anonymous"
+   *   }]
+   * }
+   * </pre>
+   * @param input
+   * @return
+   */
   @RequestMapping(value = "/ops", consumes = "application/context+json", method = RequestMethod.POST)
   Map<String, String> ops(@RequestBody Map input) {
     def execution = [application: input.application, name: input.description, stages: input.job, trigger: input.trigger ?: [:]]
+    /*now execution is:
+    {
+      "application": "ycc",
+      "name": "Save pipeline 'test'",
+      "stages": [{
+        "pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ==",
+        "type": "savePipeline",
+        "user": "anonymous"
+      }],
+      "trigger": {}
+    }
+     */
     parsePipelineTrigger(executionRepository, buildService, execution, true)
     startTask(execution)
   }
@@ -424,8 +502,16 @@ class OperationsController {
     }
   }
 
+  /**
+   * If there's no refId in every stage, then make all stages linear. Put "refId":"0" in the first stage and
+   * make its "requisiteStageRefIds" empty, put "refId":"1" in the second stage and make it depend on the first stage,
+   * that's saying "requisiteStageRefIds":[0]
+   *
+   * @param pipelineConfig
+   */
   private static void applyStageRefIds(Map<String, Serializable> pipelineConfig) {
     def stages = (List<Map<String, Object>>) pipelineConfig.stages
+    // index from 0
     stages.eachWithIndex { Map<String, Object> stage, int index ->
       stage.put("refId", String.valueOf(index))
       if (index > 0) {
@@ -450,12 +536,79 @@ class OperationsController {
     return pipeline.id
   }
 
+  /**
+   * when create/save pipeline, config is:
+   * <pre>
+   * {
+   *   "application": "ycc",
+   *   "name": "Save pipeline 'test'",
+   *   "stages": [{
+   *     "type": "savePipeline",
+   *     "pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ==",
+   *     "user": "anonymous"
+   *   }],
+   *   "trigger": {
+   *     "type": "manual",
+   *     "user": "[anonymous]",
+   *     "parameters": {},
+   *     "artifacts": [],
+   *     "expectedArtifacts": [],
+   *     "resolvedExpectedArtifacts": []
+   *   }
+   * }
+   * </pre>
+   * @param config
+   * @return
+   */
   private Map<String, String> startTask(Map config) {
     def linear = config.stages.every { it.refId == null }
     if (linear) {
       applyStageRefIds(config)
+      /*now config(pipeline) is:
+      {
+        "application": "ycc",
+        "name": "Save pipeline 'test'",
+        "stages": [{
+          "type": "savePipeline",
+          "pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ==",
+          "user": "anonymous",
+          "refId": "0",
+          "requisiteStageRefIds": []
+        }],
+        "trigger": {
+          "type": "manual",
+          "user": "anonymous",
+          "parameters": {},
+          "artifacts": [],
+          "expectedArtifacts": [],
+          "resolvedExpectedArtifacts": []
+        }
+      }
+      */
     }
     injectPipelineOrigin(config)
+    /*now config(pipeline) is:
+    {
+      "application": "ycc",
+      "name": "Save pipeline 'test'",
+      "stages": [{
+        "type": "savePipeline",
+        "pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ==",
+        "user": "anonymous",
+        "refId": "0",
+        "requisiteStageRefIds": []
+      }],
+      "trigger": {
+        "type": "manual",
+        "user": "anonymous",
+        "parameters": {},
+        "artifacts": [],
+        "expectedArtifacts": [],
+        "resolvedExpectedArtifacts": []
+      },
+      "origin": "api"
+    }
+    */
 
     for (ExecutionPreprocessor preprocessor : executionPreprocessors.findAll {
       it.supports(config, ExecutionPreprocessor.Type.ORCHESTRATION)
@@ -469,6 +622,12 @@ class OperationsController {
     [ref: "/tasks/${pipeline.id}".toString()]
   }
 
+  /**
+   * If pipeline has no "origin" attribute, get "X-SPINNAKER-USER-ORIGIN" value from http HEADER and assign it
+   * to pipeline.origin, or assign "unknown" value to pipeline.origin
+   *
+   * @param pipeline
+   */
   private void injectPipelineOrigin(Map pipeline) {
     if (!pipeline.origin) {
       pipeline.origin = AuthenticatedRequest.spinnakerUserOrigin.orElse('unknown')

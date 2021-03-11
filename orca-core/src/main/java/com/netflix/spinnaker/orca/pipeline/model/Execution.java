@@ -40,8 +40,20 @@ import javax.annotation.Nullable;
 public class Execution implements Serializable {
 
   public static final DefaultTrigger NO_TRIGGER = new DefaultTrigger("none");
+  /**
+   * ULID is better than UUID, see:
+   * <ul>
+   *   <li>https://github.com/ulid/spec</li>
+   *   <li>https://liqiang.io/post/uuids-and-ulids-d5abe995</li>
+   * </ul>
+   */
   private static final ULID ID_GENERATOR = new ULID();
 
+  /**
+   * Generate ULID for id field internally.
+   * @param type
+   * @param application
+   */
   public Execution(ExecutionType type, String application) {
     this(type, ID_GENERATOR.nextULID(), application);
   }
@@ -256,6 +268,9 @@ public class Execution implements Serializable {
     this.trigger = trigger;
   }
 
+  /**
+   * i.e. Save pipeline 'test'
+   */
   private String description;
 
   public @Nullable String getDescription() {

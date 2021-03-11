@@ -99,6 +99,30 @@ public class Stage implements Serializable {
 
   public Stage() {}
 
+  /**
+   * Create a stage object. Initialize such fields as followings:
+   * <ul>
+   *   <li>execution: Which execution this stage belongs to.</li>
+   *   <li>type: The stage's type. i.e. wait, jenkins, savePipeline(when create/save pipeline)</li>
+   *   <li>name: The stage's name, could be null when create/save pipeline.</li>
+   *   <li>refId: The stage's refId.</li>
+   *   <li>requisiteStageRefIds: All upstream stages' refIds this stage depends on.</li>
+   *   <li>startTimeExpiry: see {@link Stage#startTimeExpiry}</li>
+   *   <li>context: see {@link Stage#context}. Assign context param to this.context after removing
+   *   context param's 3 fields: refId, startTimeExpiry and requisiteStageRefIds.</li>
+   * </ul>
+   *
+   * @param execution see ExecutionLauncher's parseOrchestration method.
+   * @param type Sample value when create/save pipeline: savePipeline
+   * @param name see {@link Stage#name} field, could be null when create/save pipeline.
+   * @param context Sample value when create/save pipeline:
+   * <ul>
+   *   <li>"pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ=="</li>
+   *   <li>"user": "anonymous"</li>
+   *   <li>"refId": "0"</li>
+   *   <li>"requisiteStageRefIds": []</li>
+   * </ul>
+   */
   @SuppressWarnings("unchecked")
   public Stage(Execution execution, String type, String name, Map<String, Object> context) {
     this.execution = execution;
@@ -117,6 +141,28 @@ public class Stage implements Serializable {
     this.context.putAll(context);
   }
 
+  /**
+   * Create a stage object. Initialize such fields as followings:
+   * <ul>
+   *   <li>execution: Which execution this stage belongs to.</li>
+   *   <li>type: The stage's type. i.e. wait, jenkins, savePipeline(when create/save pipeline)</li>
+   *   <li>name: The stage's name, could be null when create/save pipeline.</li>
+   *   <li>refId: The stage's refId.</li>
+   *   <li>requisiteStageRefIds: All upstream stages' refIds this stage depends on.</li>
+   *   <li>startTimeExpiry: see {@link Stage#startTimeExpiry}</li>
+   *   <li>context: see {@link Stage#context}</li>
+   * </ul>
+   *
+   * @param execution see ExecutionLauncher's parseOrchestration method.
+   * @param type Sample value when create/save pipeline: savePipeline
+   * @param context Sample value when create/save pipeline:
+   * <ul>
+   *   <li>"pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ=="</li>
+   *   <li>"user": "anonymous"</li>
+   *   <li>"refId": "0"</li>
+   *   <li>"requisiteStageRefIds": []</li>
+   * </ul>
+   */
   public Stage(Execution execution, String type, Map<String, Object> context) {
     this(execution, type, null, context);
   }
@@ -148,7 +194,10 @@ public class Stage implements Serializable {
     this.refId = refId;
   }
 
-  /** The type as it corresponds to the Mayo configuration */
+  /**
+   * The type as it corresponds to the Mayo configuration.<p/>
+   * Sample value when create/save pipeline: savePipeline
+   */
   private String type;
 
   public @Nonnull String getType() {
@@ -170,7 +219,9 @@ public class Stage implements Serializable {
     this.name = name;
   }
 
-  /** Gets the execution object for this stage */
+  /**
+   * Gets the execution object for this stage. Which execution this stage belongs to.
+   */
   private Execution execution;
 
   @JsonBackReference
@@ -229,7 +280,16 @@ public class Stage implements Serializable {
     this.status = status;
   }
 
-  /** The context driving this stage. Provides inputs necessary to component steps */
+  /**
+   * The context driving this stage. Provides inputs necessary to component steps.<p/>
+   * When stage's type is "savePipeline", the context is:
+   * <ul>
+   *   <li>"pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ=="</li>
+   *   <li>"user": "anonymous"</li>
+   * </ul>
+   * Note: the pipeline data is encoded by "Base64.encoder.encodeToString()",
+   * see PipelineController's savePipeline method in gate service.
+   */
   private Map<String, Object> context = new StageContext(this);
 
   public @Nonnull Map<String, Object> getContext() {
@@ -297,6 +357,9 @@ public class Stage implements Serializable {
     this.parentStageId = parentStageId;
   }
 
+  /**
+   * All upstream stages' refIds this stage depends on.
+   */
   @JsonDeserialize(using = RequisiteStageRefIdDeserializer.class)
   private Collection<String> requisiteStageRefIds = emptySet();
 

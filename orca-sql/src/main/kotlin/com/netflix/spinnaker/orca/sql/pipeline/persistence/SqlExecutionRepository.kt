@@ -651,7 +651,7 @@ class SqlExecutionRepository(
   /**
    * Given an id, returns a tuple of [ULID, LegacyID]
    *
-   * - When the provided id a ULID, returns: [id, null]
+   * - When the provided id is a ULID, returns: [id, null]
    * - When id is not a ULID but exists in the table, fetches ulid and returns: [fetched_ulid, id]
    * - When id is not a ULID and does not exist, creates new_ulid and returns: [new_ulid, id]
    */
@@ -676,6 +676,76 @@ class SqlExecutionRepository(
     }
   }
 
+  /**
+   * Sample execution's json value when create/save pipeline:
+   * ```
+   * {
+   *   "type": "ORCHESTRATION",
+   *   "id": "01EYMJ4RP3SC7YB9E9FBQRMQG8",
+   *   "application": "ycc",
+   *   "name": null,
+   *   "buildTime": 1613450339029,
+   *   "canceled": false,
+   *   "canceledBy": null,
+   *   "cancellationReason": null,
+   *   "limitConcurrent": false,
+   *   "keepWaitingPipelines": false,
+   *   "stages": [{
+   *     "id": "01EYMJ4RP48G4GJ70WGJDG5FQD",
+   *     "refId": "0",
+   *     "type": "savePipeline",
+   *     "name": "savePipeline",
+   *     "startTime": null,
+   *     "endTime": null,
+   *     "startTimeExpiry": null,
+   *     "status": "NOT_STARTED",
+   *     "context": {
+   *       "pipeline": "eyJhcHBsaWNhdGlvbiI6InljYyIsImluZGV4IjoxOSwia2VlcFdhaXRpbmdQaXBlbGluZXMiOmZhbHNlLCJsaW1pdENvbmN1cnJlbnQiOnRydWUsIm5hbWUiOiJ0ZXN0Iiwic3BlbEV2YWx1YXRvciI6InY0Iiwic3RhZ2VzIjpbXSwidHJpZ2dlcnMiOltdfQ==",
+   *       "user": "anonymous"
+   *     },
+   *     "outputs": {},
+   *     "tasks": [],
+   *     "syntheticStageOwner": null,
+   *     "parentStageId": null,
+   *     "requisiteStageRefIds": [],
+   *     "scheduledTime": null,
+   *     "lastModified": null
+   *   }],
+   *   "startTime": null,
+   *   "endTime": null,
+   *   "startTimeExpiry": null,
+   *   "status": "NOT_STARTED",
+   *   "authentication": {
+   *     "user": "anonymous",
+   *     "allowedAccounts": []
+   *   },
+   *   "paused": null,
+   *   "origin": "api",
+   *   "trigger": {
+   *     "type": "manual",
+   *     "correlationId": null,
+   *     "notifications": [],
+   *     "strategy": false,
+   *     "rebake": false,
+   *     "dryRun": false,
+   *     "user": "anonymous",
+   *     "parameters": {},
+   *     "artifacts": [],
+   *     "expectedArtifacts": [],
+   *     "resolvedExpectedArtifacts": []
+   *   },
+   *   "description": "Save pipeline 'test'",
+   *   "pipelineConfigId": null,
+   *   "source": null,
+   *   "notifications": [],
+   *   "initialConfig": {},
+   *   "systemNotifications": [],
+   *   "spelEvaluator": null,
+   *   "templateVariables": null,
+   *   "partition": null
+   * }
+   * ```
+   */
   private fun storeExecutionInternal(ctx: DSLContext, execution: Execution, storeStages: Boolean = false) {
     validateHandledPartitionOrThrow(execution)
 
@@ -683,7 +753,15 @@ class SqlExecutionRepository(
     execution.stages.clear()
 
     try {
+      /*
+      ExecutionType.PIPELINE -> DSL.table("pipelines")
+      ExecutionType.ORCHESTRATION -> DSL.table("orchestrations")
+       */
       val tableName = execution.type.tableName
+      /*
+      ExecutionType.PIPELINE -> DSL.table("pipeline_stages")
+      ExecutionType.ORCHESTRATION -> DSL.table("orchestration_stages")
+       */
       val stageTableName = execution.type.stagesTableName
       val status = execution.status.toString()
       val body = mapper.writeValueAsString(execution)
@@ -756,7 +834,15 @@ class SqlExecutionRepository(
   }
 
   private fun storeStageInternal(ctx: DSLContext, stage: Stage, executionId: String? = null) {
+    /*
+    ExecutionType.PIPELINE -> DSL.table("pipeline_stages")
+    ExecutionType.ORCHESTRATION -> DSL.table("orchestration_stages")
+     */
     val stageTable = stage.execution.type.stagesTableName
+    /*
+    ExecutionType.PIPELINE -> DSL.table("pipelines")
+    ExecutionType.ORCHESTRATION -> DSL.table("orchestrations")
+     */
     val table = stage.execution.type.tableName
     val body = mapper.writeValueAsString(stage)
     val buildTime = stage.execution.buildTime
