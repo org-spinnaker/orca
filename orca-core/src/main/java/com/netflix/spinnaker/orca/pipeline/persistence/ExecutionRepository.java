@@ -64,8 +64,25 @@ public interface ExecutionRepository {
   void updateStatus(ExecutionType type, @Nonnull String id, @Nonnull ExecutionStatus status);
 
   @Nonnull
+  Collection<Stage> retrieveInitialStages(@Nonnull ExecutionType type,
+                                          @Nonnull String id) throws ExecutionNotFoundException;
+
+  @Nonnull
   @Instrumented(metricName = "retrieveById")
   Execution retrieve(@Nonnull ExecutionType type, @Nonnull String id)
+      throws ExecutionNotFoundException;
+
+  /**
+   * Retrieve execution with just a few attributes, without stages.
+   *
+   * @param type see {@link ExecutionType}
+   * @param id see {@link Execution#getId()}
+   * @return
+   * @throws ExecutionNotFoundException
+   */
+  @Nonnull
+  @Instrumented(metricName = "retrieveLightweightById")
+  Execution retrieveLightweight(@Nonnull ExecutionType type, @Nonnull String id)
       throws ExecutionNotFoundException;
 
   void delete(@Nonnull ExecutionType type, @Nonnull String id);
@@ -83,6 +100,17 @@ public interface ExecutionRepository {
 
   @Nonnull
   Observable<Execution> retrievePipelinesForPipelineConfigId(
+      @Nonnull String pipelineConfigId, @Nonnull ExecutionCriteria criteria);
+
+  /**
+   * Retrieve a pipeline's lightweight executions, each execution with just a few attributes, without stages.
+   *
+   * @param pipelineConfigId
+   * @param criteria
+   * @return
+   */
+  @Nonnull
+  Observable<Execution> retrievePipelinesLightweightForPipelineConfigId(
       @Nonnull String pipelineConfigId, @Nonnull ExecutionCriteria criteria);
 
   /**

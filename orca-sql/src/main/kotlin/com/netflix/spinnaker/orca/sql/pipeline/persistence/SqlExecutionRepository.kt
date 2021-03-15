@@ -292,10 +292,18 @@ class SqlExecutionRepository(
     }
   }
 
+  override fun retrieveInitialStages(type: ExecutionType, id: String): MutableCollection<Stage> {
+    TODO("Not yet implemented")
+  }
+
   // TODO rz - Refactor to not use exceptions. So weird.
   override fun retrieve(type: ExecutionType, id: String) =
     selectExecution(jooq, type, id)
       ?: throw ExecutionNotFoundException("No $type found for $id")
+
+  override fun retrieveLightweight(type: ExecutionType, id: String): Execution {
+    TODO("Not yet implemented")
+  }
 
   override fun retrieve(type: ExecutionType): Observable<Execution> =
     Observable.from(fetchExecutions { pageSize, cursor ->
@@ -380,6 +388,13 @@ class SqlExecutionRepository(
 
       return Observable.from(select.fetchExecutions())
     }
+  }
+
+  override fun retrievePipelinesLightweightForPipelineConfigId(
+    pipelineConfigId: String,
+    criteria: ExecutionCriteria
+  ): Observable<Execution> {
+    TODO("Not yet implemented")
   }
 
   override fun retrieveOrchestrationsForApplication(

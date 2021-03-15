@@ -137,9 +137,21 @@ class RedisInstrumentedExecutionRepository(
     }
   }
 
+  override fun retrieveInitialStages(type: Execution.ExecutionType, id: String): MutableCollection<Stage> {
+    return withMetrics("retrieveInitialStages") {
+      executionRepository.retrieveInitialStages(type, id)
+    }
+  }
+
   override fun retrieve(type: Execution.ExecutionType, id: String): Execution {
     return withMetrics("retrieve2") {
       executionRepository.retrieve(type, id)
+    }
+  }
+
+  override fun retrieveLightweight(type: Execution.ExecutionType, id: String): Execution {
+    return withMetrics("retrieveLightweight") {
+      executionRepository.retrieveLightweight(type, id)
     }
   }
 
@@ -192,6 +204,15 @@ class RedisInstrumentedExecutionRepository(
   ): Observable<Execution> {
     return withMetrics("retrievePipelinesForPipelineConfigId") {
       executionRepository.retrievePipelinesForPipelineConfigId(pipelineConfigId, criteria)
+    }
+  }
+
+  override fun retrievePipelinesLightweightForPipelineConfigId(
+    pipelineConfigId: String,
+    criteria: ExecutionRepository.ExecutionCriteria
+  ): Observable<Execution> {
+    return withMetrics("retrievePipelinesLightweightForPipelineConfigId") {
+      executionRepository.retrievePipelinesLightweightForPipelineConfigId(pipelineConfigId, criteria)
     }
   }
 
@@ -266,4 +287,5 @@ class RedisInstrumentedExecutionRepository(
       executionRepository.retrieveAllExecutionIds(type)
     }
   }
+
 }

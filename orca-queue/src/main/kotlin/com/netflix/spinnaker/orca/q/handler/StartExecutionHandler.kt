@@ -54,7 +54,7 @@ class StartExecutionHandler(
   private val log: Logger get() = LoggerFactory.getLogger(javaClass)
 
   override fun handle(message: StartExecution) {
-    message.withExecution { execution ->
+    message.withExecutionLightweight { execution ->
       if (execution.status == NOT_STARTED && !execution.isCanceled) {
         if (execution.shouldQueue()) {
           execution.pipelineConfigId?.let {
@@ -84,7 +84,10 @@ class StartExecutionHandler(
         "Could not begin execution before start time expiry"
       ))
     } else {
-      val initialStages = execution.initialStages()
+      //yuanchaochao-begin
+//      val initialStages = execution.initialStages()
+      val initialStages = repository.retrieveInitialStages(execution.type, execution.id)
+      //yuanchaochao-end
       if (initialStages.isEmpty()) {
         log.warn("No initial stages found (executionId: ${execution.id})")
         repository.updateStatus(execution.type, execution.id, TERMINAL)

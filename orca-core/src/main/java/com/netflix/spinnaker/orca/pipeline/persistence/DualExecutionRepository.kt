@@ -155,8 +155,16 @@ class DualExecutionRepository(
     select(type, id).updateStatus(type, id, status)
   }
 
+  override fun retrieveInitialStages(type: Execution.ExecutionType, id: String): MutableCollection<Stage> {
+    return select(type, id).retrieveInitialStages(type, id)
+  }
+
   override fun retrieve(type: Execution.ExecutionType, id: String): Execution {
     return select(type, id).retrieve(type, id)
+  }
+
+  override fun retrieveLightweight(type: Execution.ExecutionType, id: String): Execution {
+    return select(type, id).retrieveLightweight(type, id)
   }
 
   override fun delete(type: Execution.ExecutionType, id: String) {
@@ -191,6 +199,16 @@ class DualExecutionRepository(
     return Observable.merge(
       primary.retrievePipelinesForPipelineConfigId(pipelineConfigId, criteria),
       previous.retrievePipelinesForPipelineConfigId(pipelineConfigId, criteria)
+    ).distinct { it.id }
+  }
+
+  override fun retrievePipelinesLightweightForPipelineConfigId(
+    pipelineConfigId: String,
+    criteria: ExecutionCriteria
+  ): Observable<Execution> {
+    return Observable.merge(
+      primary.retrievePipelinesLightweightForPipelineConfigId(pipelineConfigId, criteria),
+      previous.retrievePipelinesLightweightForPipelineConfigId(pipelineConfigId, criteria)
     ).distinct { it.id }
   }
 

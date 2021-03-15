@@ -95,6 +95,14 @@ internal interface OrcaMessageHandler<M : Message> : MessageHandler<M> {
       queue.push(InvalidExecutionId(this))
     }
 
+  fun ExecutionLevel.withExecutionLightweight(block: (Execution) -> Unit) =
+    try {
+      val execution = repository.retrieveLightweight(executionType, executionId)
+      block.invoke(execution)
+    } catch (e: ExecutionNotFoundException) {
+      queue.push(InvalidExecutionId(this))
+    }
+
   fun Stage.startNext() {
     execution.let { execution ->
       val downstreamStages = downstreamStages()
@@ -119,7 +127,7 @@ internal interface OrcaMessageHandler<M : Message> : MessageHandler<M> {
       else -> {
         val criteria = ExecutionCriteria().setPageSize(2).setStatuses(RUNNING)
         repository
-          .retrievePipelinesForPipelineConfigId(configId, criteria)
+          .retrievePipelinesLightweightForPipelineConfigId(configId, criteria)
           .filter { it.id != id }
           .count()
           .toBlocking()

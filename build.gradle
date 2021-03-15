@@ -67,6 +67,14 @@ subprojects {
 
     configurations.all {
       exclude group: "javax.servlet", module: "servlet-api"
+      // fix(redis): fix parsing parameters from uri #778
+      // see https://github.com/spinnaker/kork/commit/73e2a515ee31a42a7a4fe820102348990619e342
+      resolutionStrategy {
+        force 'com.netflix.spinnaker.kork:kork-jedis:7.67.0'
+        force "com.netflix.spinnaker.kork:kork-annotations:$korkVersion"
+        force "com.netflix.spinnaker.kork:kork-core:$korkVersion"
+        force "com.netflix.spinnaker.kork:kork-exceptions:$korkVersion"
+      }
     }
 
     test {
