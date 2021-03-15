@@ -362,6 +362,32 @@ public class Stage implements Serializable {
    */
   @JsonDeserialize(using = RequisiteStageRefIdDeserializer.class)
   private Collection<String> requisiteStageRefIds = emptySet();
+  private Collection<String> requisiteStageIds = new HashSet<>();
+  private Collection<String> downstreamStageIds = new HashSet<>();
+
+  public @Nonnull Collection<String> getDownstreamStageIds() {
+    return ImmutableSet.copyOf(downstreamStageIds);
+  }
+
+  public void setDownstreamStageIds(Collection<String> downstreamStageIds) {
+    if (downstreamStageIds == null) {
+      this.downstreamStageIds = ImmutableSet.of();
+    } else {
+      this.downstreamStageIds = ImmutableSet.copyOf(downstreamStageIds);
+    }
+  }
+
+  public @Nonnull Collection<String> getRequisiteStageIds() {
+    return ImmutableSet.copyOf(requisiteStageIds);
+  }
+
+  public void setRequisiteStageIds(Collection<String> requisiteStageIds) {
+    if (requisiteStageIds == null) {
+      this.requisiteStageIds = ImmutableSet.of();
+    } else {
+      this.requisiteStageIds = ImmutableSet.copyOf(requisiteStageIds);
+    }
+  }
 
   public @Nonnull Collection<String> getRequisiteStageRefIds() {
     return ImmutableSet.copyOf(requisiteStageRefIds);

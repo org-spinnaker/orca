@@ -133,7 +133,7 @@ class HydrateQueueCommand(
 
   private fun processStage(stage: Stage): List<Action> {
     if (stage.status == NOT_STARTED) {
-      if (stage.allUpstreamStagesComplete()) {
+      if (stage.allUpstreamStagesComplete(executionRepository)) {
         return listOf(Action(
           description = "Stage is not started but all upstream stages are complete",
           message = StartStage(stage),

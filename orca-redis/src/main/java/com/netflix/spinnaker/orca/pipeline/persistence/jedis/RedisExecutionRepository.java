@@ -64,6 +64,7 @@ import redis.clients.jedis.ListPosition;
 import redis.clients.jedis.Response;
 import redis.clients.jedis.ScanParams;
 import redis.clients.jedis.ScanResult;
+import redis.clients.jedis.commands.JedisCommands;
 import rx.Observable;
 import rx.Scheduler;
 import rx.functions.Func0;
@@ -327,9 +328,33 @@ public class RedisExecutionRepository implements ExecutionRepository {
 
   @Nonnull
   @Override
+  public Stage retrieveStage(@Nonnull ExecutionType type, @Nonnull String id, @Nonnull String stageId) {
+    RedisClientDelegate delegate = getRedisDelegate(type, id);
+    return retrieveStageInternal(delegate, type, id, stageId);
+  }
+
+  @Nonnull
+  @Override
   public Collection<Stage> retrieveInitialStages(@Nonnull ExecutionType type, @Nonnull String id) {
     RedisClientDelegate delegate = getRedisDelegate(type, id);
     return retrieveInitialStagesInternal(delegate, type, id);
+  }
+
+  @Nonnull
+  @Override
+  public Collection<Stage> retrieveUpstreamStages(@Nonnull ExecutionType type,
+                                                  @Nonnull String id,
+                                                  @Nonnull String stageId) {
+    RedisClientDelegate delegate = getRedisDelegate(type, id);
+    return retrieveUpstreamStagesInternal(delegate, type, id, stageId);
+  }
+
+  @Nonnull
+  @Override
+  public Collection<Stage> retrieveDownstreamStages(@Nonnull ExecutionType type,
+                                                    @Nonnull String id,
+                                                    @Nonnull String stageId) {
+    return null;
   }
 
   @Override
@@ -1077,6 +1102,18 @@ public class RedisExecutionRepository implements ExecutionRepository {
             } else {
               stage.setRequisiteStageRefIds(emptySet());
             }
+            String requisiteStageIds = map.get(prefix + "requisiteStageIds");
+            if (StringUtils.isNotEmpty(requisiteStageIds)) {
+              stage.setRequisiteStageIds(Arrays.asList(requisiteStageIds.split(",")));
+            } else {
+              stage.setRequisiteStageIds(emptySet());
+            }
+            String downstreamStageIds = map.get(prefix + "downstreamStageIds");
+            if (StringUtils.isNotEmpty(downstreamStageIds)) {
+              stage.setDownstreamStageIds(Arrays.asList(downstreamStageIds.split(",")));
+            } else {
+              stage.setDownstreamStageIds(emptySet());
+            }
             stage.setScheduledTime(NumberUtils.createLong(map.get(prefix + "scheduledTime")));
             if (map.get(prefix + "context") != null) {
               stage.setContext(mapper.readValue(map.get(prefix + "context"), MAP_STRING_TO_OBJECT));
@@ -1143,6 +1180,7 @@ public class RedisExecutionRepository implements ExecutionRepository {
     }
 
     execution.getStages().forEach(s -> map.putAll(serializeStage(s)));
+    map.putAll(extractUpstreamDownstreamStages(execution));
 
     if (execution.getType() == PIPELINE) {
       try {
@@ -1157,6 +1195,47 @@ public class RedisExecutionRepository implements ExecutionRepository {
       map.put("description", execution.getDescription());
     }
     return map;
+  }
+
+  private Map<String, String> extractUpstreamDownstreamStages(Execution execution) {
+    Map<String, String> result = new HashMap<>();
+
+    // (k1,k2)->k1, if duplicate key, keep key1, abandon key2
+    Map<String, String> stageIdAndRefIdMap = execution.getStages()
+        .stream()
+        .collect(
+            Collectors.toMap(Stage::getRefId, Stage::getId, (k1, k2) -> k1)
+        );
+    Map<String, List<String>> downstreamStageIds = new HashMap<>();
+    execution.getStages().forEach(stage -> {
+      Collection<String> requisiteStageRefIds = stage.getRequisiteStageRefIds();
+      if (!CollectionUtils.isEmpty(requisiteStageRefIds)) {
+        List<String> requisiteStageIds = stageIdAndRefIdMap.entrySet()
+            .stream()
+            .filter(it -> requisiteStageRefIds.contains(it.getKey()))
+            .map(Map.Entry::getValue)
+            .collect(Collectors.toList());
+        if (!CollectionUtils.isEmpty(requisiteStageIds)) {
+          String field = format("stage.%s.requisiteStageIds", stage.getId());
+          result.put(field, String.join(",", requisiteStageIds));
+          requisiteStageIds.forEach(it -> {
+            if (downstreamStageIds.containsKey(it)) {
+              downstreamStageIds.get(it).add(stage.getId());
+            } else {
+              List<String> ids = new ArrayList<>();
+              ids.add(stage.getId());
+              downstreamStageIds.put(it, ids);
+            }
+          });
+        }
+      }
+    });
+    downstreamStageIds.forEach((key, value) -> {
+      String field = format("stage.%s.downstreamStageIds", key);
+      result.put(field, String.join(",", value));
+    });
+
+    return result;
   }
 
   protected Map<String, String> serializeStage(Stage stage) {
@@ -1181,6 +1260,16 @@ public class RedisExecutionRepository implements ExecutionRepository {
       map.put(
           prefix + "requisiteStageRefIds",
           stage.getRequisiteStageRefIds().stream().collect(Collectors.joining(",")));
+    }
+    if (!stage.getRequisiteStageIds().isEmpty()) {
+      map.put(
+          prefix + "requisiteStageIds",
+          stage.getRequisiteStageIds().stream().collect(Collectors.joining(",")));
+    }
+    if (!stage.getDownstreamStageIds().isEmpty()) {
+      map.put(
+          prefix + "downstreamStageIds",
+          stage.getDownstreamStageIds().stream().collect(Collectors.joining(",")));
     }
     map.put(
         prefix + "scheduledTime",
@@ -1571,14 +1660,7 @@ public class RedisExecutionRepository implements ExecutionRepository {
     String key = executionKey(type, id);
     String initialStagesKey = format("%s:initialStages", key);
 
-    boolean exists =
-        delegate.withCommandsClient(
-            c -> {
-              return c.exists(key);
-            });
-    if (!exists) {
-      throw new ExecutionNotFoundException("No " + type + " found for " + id);
-    }
+    checkExecutionExisted(delegate, type, id, key);
 
     StringBuilder application = new StringBuilder("");
     List<String> initialStagesId = new ArrayList<>();
@@ -1600,6 +1682,153 @@ public class RedisExecutionRepository implements ExecutionRepository {
     });
 
     return initialStages;
+  }
+
+  private Collection<Stage> retrieveUpstreamStagesInternal(RedisClientDelegate delegate,
+                                                           ExecutionType type,
+                                                           String id,
+                                                           String stageId) throws ExecutionNotFoundException {
+    String key = executionKey(type, id);
+    checkExecutionExisted(delegate, type, id, key);
+
+    String keyRequisiteStageIds = format("stage.%s.requisiteStageIds", stageId);
+    final String requisiteStageIds = delegate.withCommandsClient(
+        c -> {
+          return c.hget(key, keyRequisiteStageIds);
+        });
+    if (StringUtils.isNotEmpty(requisiteStageIds)) {
+      return Arrays.stream(requisiteStageIds.split(","))
+          .map(requisiteStageId -> retrieveStageWithStatusInternal(delegate, type, id, requisiteStageId))
+          .collect(Collectors.toList());
+    }
+    return Collections.emptyList();
+  }
+
+  private Stage retrieveStageWithStatusInternal(RedisClientDelegate delegate,
+                                                ExecutionType type,
+                                                String id,
+                                                String stageId) {
+    String key = executionKey(type, id);
+    checkExecutionExisted(delegate, type, id, key);
+
+    String prefix = format("stage.%s.", stageId);
+    String status = delegate.withCommandsClient(
+        c -> {
+          return c.hget(key, prefix + "status");
+        });
+    Stage stage = new Stage();
+    stage.setStatus(ExecutionStatus.valueOf(status));
+
+    return stage;
+  }
+
+  /**
+   * without execution in stage.
+   *
+   * @param delegate
+   * @param type
+   * @param id
+   * @param stageId
+   * @return
+   */
+  private Stage retrieveStageInternal(RedisClientDelegate delegate,
+                                      ExecutionType type,
+                                      String id,
+                                      String stageId) {
+    String key = executionKey(type, id);
+    String prefix = format("stage.%s.", stageId);
+
+    checkExecutionExisted(delegate, type, id, key);
+
+    final List<String> stageValues = delegate.withCommandsClient(
+        c -> {
+          return c.hmget(key,
+              prefix + "refId",
+              prefix + "type",
+              prefix + "name",
+              prefix + "startTime",
+              prefix + "endTime",
+              prefix + "status",
+              prefix + "startTimeExpiry",
+              prefix + "syntheticStageOwner",
+              prefix + "parentStageId",
+              prefix + "requisiteStageRefIds",
+              prefix + "scheduledTime",
+              prefix + "context",
+              prefix + "outputs",
+              prefix + "tasks",
+              prefix + "lastModified",
+              prefix + "requisiteStageIds",
+              prefix + "downstreamStageIds");
+        });
+
+    Stage stage = new Stage();
+    stage.setId(stageId);
+    stage.setRefId(stageValues.get(0));
+    stage.setType(stageValues.get(1));
+    stage.setName(stageValues.get(2));
+    stage.setStartTime(NumberUtils.createLong(stageValues.get(3)));
+    stage.setEndTime(NumberUtils.createLong(stageValues.get(4)));
+    stage.setStatus(ExecutionStatus.valueOf(stageValues.get(5)));
+    if (stageValues.get(6) != null) {
+      stage.setStartTimeExpiry(Long.valueOf(stageValues.get(6)));
+    }
+    if (stageValues.get(7) != null) {
+      stage.setSyntheticStageOwner(SyntheticStageOwner.valueOf(stageValues.get(7)));
+    }
+    stage.setParentStageId(stageValues.get(8));
+    String requisiteStageRefIds = stageValues.get(9);
+    if (StringUtils.isNotEmpty(requisiteStageRefIds)) {
+      stage.setRequisiteStageRefIds(Arrays.asList(requisiteStageRefIds.split(",")));
+    } else {
+      stage.setRequisiteStageRefIds(emptySet());
+    }
+    stage.setScheduledTime(NumberUtils.createLong(stageValues.get(10)));
+    try{
+      if (stageValues.get(11) != null) {
+        stage.setContext(mapper.readValue(stageValues.get(11), MAP_STRING_TO_OBJECT));
+      } else {
+        stage.setContext(emptyMap());
+      }
+      if (stageValues.get(12) != null) {
+        stage.setOutputs(mapper.readValue(stageValues.get(12), MAP_STRING_TO_OBJECT));
+      } else {
+        stage.setOutputs(emptyMap());
+      }
+      if (stageValues.get(13) != null) {
+        stage.setTasks(mapper.readValue(stageValues.get(13), LIST_OF_TASKS));
+      } else {
+        stage.setTasks(emptyList());
+      }
+      if (stageValues.get(14) != null) {
+        stage.setLastModified(mapper.readValue(stageValues.get(14), Stage.LastModifiedDetails.class));
+      }
+    } catch (Exception e) {
+      final String application = delegate.withCommandsClient(
+          c -> {
+            return c.hget(key, "application");
+          });
+      Id serializationErrorId =
+          registry
+              .createId("executions.deserialization.error")
+              .withTag("executionType", type)
+              .withTag("application", application);
+      registry.counter(serializationErrorId).increment();
+      throw new ExecutionSerializationException(
+          String.format("Failed serializing execution json, id: %s", id), e);
+    }
+    if (StringUtils.isNotEmpty(stageValues.get(15))) {
+      stage.setRequisiteStageIds(Arrays.asList(stageValues.get(15).split(",")));
+    } else {
+      stage.setRequisiteStageIds(emptySet());
+    }
+    if (StringUtils.isNotEmpty(stageValues.get(16))) {
+      stage.setDownstreamStageIds(Arrays.asList(stageValues.get(16).split(",")));
+    } else {
+      stage.setDownstreamStageIds(emptySet());
+    }
+
+    return stage;
   }
 
   protected Execution retrieveInternal(RedisClientDelegate delegate, ExecutionType type, String id)
@@ -1630,14 +1859,7 @@ public class RedisExecutionRepository implements ExecutionRepository {
     String key = executionKey(type, id);
     String indexKey = format("%s:stageIndex", key);
 
-    boolean exists =
-        delegate.withCommandsClient(
-            c -> {
-              return c.exists(key);
-            });
-    if (!exists) {
-      throw new ExecutionNotFoundException("No " + type + " found for " + id);
-    }
+    checkExecutionExisted(delegate, type, id, key);
 
     final Map<String, String> map = new HashMap<>();
     final List<String> stageIds = new ArrayList<>();
@@ -1657,6 +1879,17 @@ public class RedisExecutionRepository implements ExecutionRepository {
           }
         });
     return ImmutablePair.of(map, stageIds);
+  }
+
+  private void checkExecutionExisted(RedisClientDelegate delegate, ExecutionType type, String id, String key) {
+    boolean exists =
+        delegate.withCommandsClient(
+            c -> {
+              return c.exists(key);
+            });
+    if (!exists) {
+      throw new ExecutionNotFoundException("No " + type + " found for " + id);
+    }
   }
 
   protected List<ExecutionStatus> fetchMultiExecutionStatus(

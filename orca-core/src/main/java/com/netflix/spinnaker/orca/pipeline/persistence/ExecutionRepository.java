@@ -63,9 +63,32 @@ public interface ExecutionRepository {
 
   void updateStatus(ExecutionType type, @Nonnull String id, @Nonnull ExecutionStatus status);
 
+  /**
+   * Retrieve stage without execution.
+   *
+   * @param type
+   * @param id
+   * @param stageId
+   * @return
+   */
+  @Nonnull
+  Stage retrieveStage(@Nonnull ExecutionType type,
+                      @Nonnull String id,
+                      @Nonnull String stageId);
+
   @Nonnull
   Collection<Stage> retrieveInitialStages(@Nonnull ExecutionType type,
                                           @Nonnull String id) throws ExecutionNotFoundException;
+
+  @Nonnull
+  Collection<Stage> retrieveUpstreamStages(@Nonnull ExecutionType type,
+                                           @Nonnull String id,
+                                           @Nonnull String stageId);
+
+  @Nonnull
+  Collection<Stage> retrieveDownstreamStages(@Nonnull ExecutionType type,
+                                             @Nonnull String id,
+                                             @Nonnull String stageId);
 
   @Nonnull
   @Instrumented(metricName = "retrieveById")

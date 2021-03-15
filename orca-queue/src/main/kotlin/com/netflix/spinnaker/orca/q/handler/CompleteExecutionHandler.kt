@@ -116,7 +116,7 @@ class CompleteExecutionHandler(
 
   private fun List<Stage>.otherBranchesIncomplete() =
     any { it.status == RUNNING } ||
-      any { it.status == NOT_STARTED && it.allUpstreamStagesComplete() }
+      any { it.status == NOT_STARTED && it.allUpstreamStagesComplete(repository) }
 
   override val messageType = CompleteExecution::class.java
 }

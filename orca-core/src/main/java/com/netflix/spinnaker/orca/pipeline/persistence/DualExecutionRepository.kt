@@ -155,8 +155,20 @@ class DualExecutionRepository(
     select(type, id).updateStatus(type, id, status)
   }
 
+  override fun retrieveStage(type: Execution.ExecutionType, id: String, stageId: String): Stage {
+    return select(type, id).retrieveStage(type, id, stageId)
+  }
+
   override fun retrieveInitialStages(type: Execution.ExecutionType, id: String): MutableCollection<Stage> {
     return select(type, id).retrieveInitialStages(type, id)
+  }
+
+  override fun retrieveUpstreamStages(type: Execution.ExecutionType, id: String, stageId: String): MutableCollection<Stage> {
+    return select(type, id).retrieveUpstreamStages(type, id, stageId)
+  }
+
+  override fun retrieveDownstreamStages(type: Execution.ExecutionType, id: String, stageId: String): MutableCollection<Stage> {
+    return select(type, id).retrieveDownstreamStages(type, id, stageId)
   }
 
   override fun retrieve(type: Execution.ExecutionType, id: String): Execution {

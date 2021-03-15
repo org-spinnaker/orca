@@ -76,11 +76,11 @@ class StartStageHandler(
     message.withStage { stage ->
       try {
         stage.withAuth {
-          if (stage.anyUpstreamStagesFailed()) {
+          if (stage.anyUpstreamStagesFailed(repository)) {
             // this only happens in restart scenarios
             log.warn("Tried to start stage ${stage.id} but something upstream had failed (executionId: ${message.executionId})")
             queue.push(CompleteExecution(message))
-          } else if (stage.allUpstreamStagesComplete()) {
+          } else if (stage.allUpstreamStagesComplete(repository)) {
             if (stage.status != NOT_STARTED) {
               log.warn("Ignoring $message as stage is already ${stage.status}")
             } else if (stage.shouldSkip()) {

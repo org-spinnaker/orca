@@ -292,7 +292,19 @@ class SqlExecutionRepository(
     }
   }
 
+  override fun retrieveStage(type: ExecutionType, id: String, stageId: String): Stage {
+    TODO("Not yet implemented")
+  }
+
   override fun retrieveInitialStages(type: ExecutionType, id: String): MutableCollection<Stage> {
+    TODO("Not yet implemented")
+  }
+
+  override fun retrieveUpstreamStages(type: ExecutionType, id: String, stageId: String): MutableCollection<Stage> {
+    TODO("Not yet implemented")
+  }
+
+  override fun retrieveDownstreamStages(type: ExecutionType, id: String, stageId: String): MutableCollection<Stage> {
     TODO("Not yet implemented")
   }
 

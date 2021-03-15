@@ -28,6 +28,7 @@ import com.netflix.spinnaker.orca.pipeline.model.Stage
 import com.netflix.spinnaker.orca.pipeline.model.SyntheticStageOwner.STAGE_AFTER
 import com.netflix.spinnaker.orca.pipeline.model.SyntheticStageOwner.STAGE_BEFORE
 import com.netflix.spinnaker.orca.pipeline.model.Task
+import com.netflix.spinnaker.orca.pipeline.persistence.ExecutionRepository
 
 /**
  * @return the stage's first before stage or `null` if there are none.
@@ -77,14 +78,27 @@ fun Stage.nextTask(task: Task): Task? =
 fun Stage.upstreamStages(): List<Stage> =
   execution.stages.filter { it.refId in requisiteStageRefIds }
 
+fun Stage.upstreamStages(repository: ExecutionRepository): Collection<Stage> =
+  repository.retrieveUpstreamStages(execution.type, execution.id, id)
+
+fun Stage.downstreamStages(repository: ExecutionRepository): Collection<Stage> =
+  repository.retrieveDownstreamStages(execution.type, execution.id, id)
+
 /**
  * @return `true` if all upstream stages of this stage were run successfully.
  */
 fun Stage.allUpstreamStagesComplete(): Boolean =
   upstreamStages().all { it.status in listOf(SUCCEEDED, FAILED_CONTINUE, SKIPPED) }
 
+fun Stage.allUpstreamStagesComplete(repository: ExecutionRepository): Boolean =
+  upstreamStages(repository).all { it.status in listOf(SUCCEEDED, FAILED_CONTINUE, SKIPPED) }
+
 fun Stage.anyUpstreamStagesFailed(): Boolean =
   upstreamStages().any { it.status in listOf(TERMINAL, STOPPED, CANCELED) || it.status == NOT_STARTED && it.anyUpstreamStagesFailed() }
+
+fun Stage.anyUpstreamStagesFailed(repository: ExecutionRepository): Boolean =
+  upstreamStages(repository).any { it.status in listOf(TERMINAL, STOPPED, CANCELED)
+    || it.status == NOT_STARTED && it.anyUpstreamStagesFailed(repository) }
 
 fun Stage.syntheticStages(): List<Stage> =
   execution.stages.filter { it.parentStageId == id }
