@@ -64,7 +64,6 @@ import redis.clients.jedis.ListPosition;
 import redis.clients.jedis.Response;
 import redis.clients.jedis.ScanParams;
 import redis.clients.jedis.ScanResult;
-import redis.clients.jedis.commands.JedisCommands;
 import rx.Observable;
 import rx.Scheduler;
 import rx.functions.Func0;
@@ -354,7 +353,8 @@ public class RedisExecutionRepository implements ExecutionRepository {
   public Collection<Stage> retrieveDownstreamStages(@Nonnull ExecutionType type,
                                                     @Nonnull String id,
                                                     @Nonnull String stageId) {
-    return null;
+    RedisClientDelegate delegate = getRedisDelegate(type, id);
+    return retrieveDownstreamStages(delegate, type, id, stageId);
   }
 
   @Override
@@ -1692,32 +1692,64 @@ public class RedisExecutionRepository implements ExecutionRepository {
     checkExecutionExisted(delegate, type, id, key);
 
     String keyRequisiteStageIds = format("stage.%s.requisiteStageIds", stageId);
-    final String requisiteStageIds = delegate.withCommandsClient(
+    return getUpstreamDownstreamStages(delegate, type, id, key, keyRequisiteStageIds);
+  }
+
+  private Collection<Stage> retrieveDownstreamStages(RedisClientDelegate delegate,
+                                                           ExecutionType type,
+                                                           String id,
+                                                           String stageId) throws ExecutionNotFoundException {
+    String key = executionKey(type, id);
+    checkExecutionExisted(delegate, type, id, key);
+
+    String keyDownstreamStageIds = format("stage.%s.downstreamStageIds", stageId);
+    return getUpstreamDownstreamStages(delegate, type, id, key, keyDownstreamStageIds);
+  }
+
+  @NotNull
+  private Collection<Stage> getUpstreamDownstreamStages(RedisClientDelegate delegate,
+                                                        ExecutionType type,
+                                                        String id,
+                                                        String executionKey,
+                                                        String keyStageIds) {
+    final String stageIds = delegate.withCommandsClient(
         c -> {
-          return c.hget(key, keyRequisiteStageIds);
+          return c.hget(executionKey, keyStageIds);
         });
-    if (StringUtils.isNotEmpty(requisiteStageIds)) {
-      return Arrays.stream(requisiteStageIds.split(","))
-          .map(requisiteStageId -> retrieveStageWithStatusInternal(delegate, type, id, requisiteStageId))
+    if (StringUtils.isNotEmpty(stageIds)) {
+      return Arrays.stream(stageIds.split(","))
+          .map(stageId -> retrieveStageLightweightInternal(delegate, type, id, stageId))
           .collect(Collectors.toList());
     }
     return Collections.emptyList();
   }
 
-  private Stage retrieveStageWithStatusInternal(RedisClientDelegate delegate,
-                                                ExecutionType type,
-                                                String id,
-                                                String stageId) {
+  /**
+   * lightweight Stage with just a few attributes, including: id, status and execution(type,id,application),
+   *
+   * @param delegate
+   * @param type
+   * @param id
+   * @param stageId
+   * @return
+   */
+  private Stage retrieveStageLightweightInternal(RedisClientDelegate delegate,
+                                                 ExecutionType type,
+                                                 String id,
+                                                 String stageId) {
     String key = executionKey(type, id);
     checkExecutionExisted(delegate, type, id, key);
 
     String prefix = format("stage.%s.", stageId);
-    String status = delegate.withCommandsClient(
+    List<String> results = delegate.withCommandsClient(
         c -> {
-          return c.hget(key, prefix + "status");
+          return c.hmget(key, prefix + "status", "application");
         });
     Stage stage = new Stage();
-    stage.setStatus(ExecutionStatus.valueOf(status));
+    stage.setId(stageId);
+    stage.setStatus(ExecutionStatus.valueOf(results.get(0)));
+    Execution execution = new Execution(type, id, results.get(1));
+    stage.setExecution(execution);
 
     return stage;
   }

@@ -19,6 +19,7 @@ package com.netflix.spinnaker.orca.q.handler
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.netflix.spinnaker.orca.ExecutionStatus.RUNNING
 import com.netflix.spinnaker.orca.exceptions.ExceptionHandler
+import com.netflix.spinnaker.orca.ext.downstreamStages
 import com.netflix.spinnaker.orca.ext.parent
 import com.netflix.spinnaker.orca.jackson.OrcaObjectMapper
 import com.netflix.spinnaker.orca.pipeline.model.Execution
@@ -105,7 +106,8 @@ internal interface OrcaMessageHandler<M : Message> : MessageHandler<M> {
 
   fun Stage.startNext() {
     execution.let { execution ->
-      val downstreamStages = downstreamStages()
+//      val downstreamStages = downstreamStages()
+      val downstreamStages = downstreamStages(repository)
       val phase = syntheticStageOwner
       if (downstreamStages.isNotEmpty()) {
         downstreamStages.forEach {
