@@ -75,6 +75,11 @@ subprojects {
         force "com.netflix.spinnaker.kork:kork-core:$korkVersion"
         force "com.netflix.spinnaker.kork:kork-exceptions:$korkVersion"
       }
+      resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == 'org.springframework.boot') {
+            details.useVersion "2.2.4.RELEASE"
+        }
+      }
     }
 
     test {
