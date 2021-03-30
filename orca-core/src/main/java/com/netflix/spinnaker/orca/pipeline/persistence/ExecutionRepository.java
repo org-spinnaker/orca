@@ -72,9 +72,9 @@ public interface ExecutionRepository {
    * @return
    */
   @Nonnull
-  Stage retrieveStage(@Nonnull ExecutionType type,
-                      @Nonnull String id,
-                      @Nonnull String stageId);
+  Stage retrieveStageWithoutExecution(@Nonnull ExecutionType type,
+                                      @Nonnull String id,
+                                      @Nonnull String stageId);
 
   @Nonnull
   Collection<Stage> retrieveInitialStages(@Nonnull ExecutionType type,

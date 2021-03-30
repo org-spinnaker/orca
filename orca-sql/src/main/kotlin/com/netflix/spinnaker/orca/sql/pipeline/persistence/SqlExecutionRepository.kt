@@ -292,7 +292,7 @@ class SqlExecutionRepository(
     }
   }
 
-  override fun retrieveStage(type: ExecutionType, id: String, stageId: String): Stage {
+  override fun retrieveStageWithoutExecution(type: ExecutionType, id: String, stageId: String): Stage {
     TODO("Not yet implemented")
   }
 

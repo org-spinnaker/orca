@@ -327,7 +327,7 @@ public class RedisExecutionRepository implements ExecutionRepository {
 
   @Nonnull
   @Override
-  public Stage retrieveStage(@Nonnull ExecutionType type, @Nonnull String id, @Nonnull String stageId) {
+  public Stage retrieveStageWithoutExecution(@Nonnull ExecutionType type, @Nonnull String id, @Nonnull String stageId) {
     RedisClientDelegate delegate = getRedisDelegate(type, id);
     return retrieveStageInternal(delegate, type, id, stageId);
   }

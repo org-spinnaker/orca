@@ -195,6 +195,11 @@ public class ContextParameterProcessor {
     return isNotEmpty(value) && value.contains("${");
   }
 
+  /**
+   *
+   * @param executionSpelVersion e.g. v4
+   * @return
+   */
   public SpelEvaluatorVersion getEffectiveSpelVersionToUse(String executionSpelVersion) {
     String override =
         dynamicConfigService.getConfig(String.class, "expression.spel-version-override", "");

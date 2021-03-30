@@ -323,6 +323,7 @@ public class Execution implements Serializable {
     return systemNotifications;
   }
 
+  /** e.g. v4 */
   private String spelEvaluator;
 
   public @Nullable String getSpelEvaluator() {
