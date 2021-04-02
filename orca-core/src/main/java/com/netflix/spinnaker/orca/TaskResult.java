@@ -22,6 +22,8 @@ import lombok.Data;
 import lombok.NonNull;
 import lombok.Singular;
 
+import java.util.List;
+
 @Data
 @Builder
 public final class TaskResult {
@@ -49,6 +51,9 @@ public final class TaskResult {
    */
   @Singular("output")
   private final ImmutableMap<String, ?> outputs;
+
+  private List<String> logs;
+  private List<String> failureMessages;
 
   public static TaskResult ofStatus(ExecutionStatus status) {
     return TaskResult.builder(status).build();

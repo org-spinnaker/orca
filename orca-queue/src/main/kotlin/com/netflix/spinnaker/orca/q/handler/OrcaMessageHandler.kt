@@ -70,6 +70,20 @@ internal interface OrcaMessageHandler<M : Message> : MessageHandler<M> {
         }
     }
 
+  fun TaskLevel.withTaskLightweight(block: (Stage, Task) -> Unit) =
+    withStageLightweight { stage ->
+      stage
+        .taskById(taskId)
+        .let { task ->
+          if (task == null) {
+            log.error("InvalidTaskId: Unable to find task {} in stage '{}' while processing message {}", taskId, mapper.writeValueAsString(stage), this)
+            queue.push(InvalidTaskId(this))
+          } else {
+            block.invoke(stage, task)
+          }
+        }
+    }
+
   fun StageLevel.withStage(block: (Stage) -> Unit) =
     withExecution { execution ->
       try {
@@ -88,6 +102,18 @@ internal interface OrcaMessageHandler<M : Message> : MessageHandler<M> {
       }
     }
 
+  fun StageLevel.withStageLightweight(block: (Stage) -> Unit) =
+    try {
+      repository
+        .retrieveStageLightweight(executionType, executionId, stageId)
+        .also {
+          Stage(it.execution, it.type, it.context)
+        }
+        .let(block)
+    } catch (e: IllegalArgumentException) {
+      queue.push(InvalidStageId(this))
+    }
+
   fun ExecutionLevel.withExecution(block: (Execution) -> Unit) =
     try {
       val execution = repository.retrieve(executionType, executionId)
@@ -104,19 +130,18 @@ internal interface OrcaMessageHandler<M : Message> : MessageHandler<M> {
       queue.push(InvalidExecutionId(this))
     }
 
-  fun Stage.startNext() {
+  fun Stage.startNext(lightweight: Boolean = false) {
     execution.let { execution ->
-//      val downstreamStages = downstreamStages()
       val downstreamStages = downstreamStages(repository)
       val phase = syntheticStageOwner
       if (downstreamStages.isNotEmpty()) {
         downstreamStages.forEach {
-          queue.push(StartStage(it))
+          queue.push(StartStage(it, lightweight))
         }
       } else if (phase != null) {
         queue.ensure(ContinueParentStage(parent(), phase), Duration.ZERO)
       } else {
-        queue.push(CompleteExecution(execution))
+        queue.push(CompleteExecution(execution, lightweight))
       }
     }
   }

@@ -35,6 +35,30 @@ class RescheduleExecutionHandler(
 
   @Suppress("UNCHECKED_CAST")
   override fun handle(message: RescheduleExecution) {
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  private fun handleLightweight(message: RescheduleExecution) {
+    repository.retrieveAllStagesLightweight(message.executionType, message.executionId)
+      .filter { it.status == ExecutionStatus.RUNNING }
+      .forEach { stage ->
+        stage.tasks
+          .filter { it.status == ExecutionStatus.RUNNING }
+          .forEach {
+            queue.reschedule(RunTask(message,
+              stage.id,
+              it.id,
+              taskResolver.getTaskClass(it.implementingClass)
+            ))
+          }
+      }
+  }
+
+  private fun handleNative(message: RescheduleExecution) {
     message.withExecution { execution ->
       execution
         .stages

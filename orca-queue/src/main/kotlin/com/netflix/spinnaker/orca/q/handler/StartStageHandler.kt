@@ -73,6 +73,69 @@ class StartStageHandler(
   private val retryDelay = Duration.ofMillis(retryDelayMs)
 
   override fun handle(message: StartStage) {
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  private fun handleLightweight(message: StartStage) {
+    message.withStageLightweight { stage ->
+      try {
+        if (stage.anyUpstreamStagesFailed(repository)) {
+          // this only happens in restart scenarios
+          log.warn("Tried to start stage ${stage.id} but something upstream had failed (executionId: ${message.executionId})")
+          queue.push(CompleteExecution(message, true))
+        } else if (stage.allUpstreamStagesComplete(repository)) {
+          if (stage.status != NOT_STARTED) {
+            log.warn("Ignoring $message as stage is already ${stage.status}")
+            // if we restart one failed-continue stage, it will update the execution's status to RUNNING.
+            // if the failed-continue stage finally succeeded, it will start it's downstream stages and
+            // the downstream stages could be complete already.
+            if (stage.status.isComplete) {
+              queue.push(CompleteExecution(message, message.lightweight))
+            }
+          } else {
+            try {
+              // Set the startTime in case we throw an exception.
+              stage.startTime = clock.millis()
+              repository.storeStage(stage)
+
+              stage.planLightweight()
+              stage.status = RUNNING
+              repository.storeStage(stage)
+
+              stage.startLightweight()
+
+              publisher.publishEvent(StageStarted(this, stage))
+              trackResult(stage)
+            } catch (e: Exception) {
+              val exceptionDetails = exceptionHandlers.shouldRetry(e, stage.name)
+              if (exceptionDetails?.shouldRetry == true) {
+                val attempts = message.getAttribute<AttemptsAttribute>()?.attempts ?: 0
+                log.warn("Error planning ${stage.type} stage for ${message.executionType}[${message.executionId}] (attempts: $attempts)")
+
+                message.setAttribute(MaxAttemptsAttribute(40))
+                queue.push(message, retryDelay)
+              } else {
+                handlePlanningException(message, stage, e, true)
+              }
+            }
+          }
+        } else {
+          log.info("Re-queuing $message as upstream stages are not yet complete")
+          queue.push(message, retryDelay)
+        }
+      } catch (e: Exception) {
+        message.withStageLightweight { stage ->
+          handlePlanningException(message, stage, e, true)
+        }
+      }
+    }
+  }
+
+  private fun handleNative(message: StartStage) {
     message.withStage { stage ->
       try {
         stage.withAuth {
@@ -110,13 +173,7 @@ class StartStageHandler(
                   message.setAttribute(MaxAttemptsAttribute(40))
                   queue.push(message, retryDelay)
                 } else {
-                  log.error("Error running ${stage.type}[${stage.id}] stage for ${message.executionType}[${message.executionId}]", e)
-                  stage.apply {
-                    context["exception"] = exceptionDetails
-                    context["beforeStagePlanningFailed"] = true
-                  }
-                  repository.storeStage(stage)
-                  queue.push(CompleteStage(message))
+                  handlePlanningException(message, stage, e)
                 }
               }
             }
@@ -127,19 +184,23 @@ class StartStageHandler(
         }
       } catch (e: Exception) {
         message.withStage { stage ->
-          log.error("Error running ${stage.type}[${stage.id}] stage for ${message.executionType}[${message.executionId}]", e)
-
-          stage.apply {
-            val exceptionDetails = exceptionHandlers.shouldRetry(e, stage.name)
-            context["exception"] = exceptionDetails
-            context["beforeStagePlanningFailed"] = true
-          }
-
-          repository.storeStage(stage)
-          queue.push(CompleteStage(message))
+          handlePlanningException(message, stage, e)
         }
       }
     }
+  }
+
+  private fun handlePlanningException(message: StartStage, stage: Stage, e: Exception, lightweight: Boolean = false) {
+    log.error("Error running ${stage.type}[${stage.id}] stage for ${message.executionType}[${message.executionId}]", e)
+
+    stage.apply {
+      val exceptionDetails = exceptionHandlers.shouldRetry(e, stage.name)
+      context["exception"] = exceptionDetails
+      context["beforeStagePlanningFailed"] = true
+    }
+
+    repository.storeStage(stage)
+    queue.push(CompleteStage(message, lightweight))
   }
 
   private fun trackResult(stage: Stage) {
@@ -174,6 +235,10 @@ class StartStageHandler(
     }
   }
 
+  private fun Stage.planLightweight() {
+    builder().buildTasks(this)
+  }
+
   private fun Stage.start() {
     val beforeStages = firstBeforeStages()
     if (beforeStages.isEmpty()) {
@@ -195,6 +260,15 @@ class StartStageHandler(
       beforeStages.forEach {
         queue.push(StartStage(it))
       }
+    }
+  }
+
+  private fun Stage.startLightweight() {
+    val task = firstTask()
+    if (task == null) {
+      queue.push(CompleteStage(this, true))
+    } else {
+      queue.push(StartTask(this, task.id, true))
     }
   }
 

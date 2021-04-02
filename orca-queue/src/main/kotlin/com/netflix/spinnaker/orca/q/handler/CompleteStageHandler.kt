@@ -29,10 +29,7 @@ import com.netflix.spinnaker.orca.ExecutionStatus.SUCCEEDED
 import com.netflix.spinnaker.orca.ExecutionStatus.TERMINAL
 import com.netflix.spinnaker.orca.events.StageComplete
 import com.netflix.spinnaker.orca.exceptions.ExceptionHandler
-import com.netflix.spinnaker.orca.ext.afterStages
-import com.netflix.spinnaker.orca.ext.failureStatus
-import com.netflix.spinnaker.orca.ext.firstAfterStages
-import com.netflix.spinnaker.orca.ext.syntheticStages
+import com.netflix.spinnaker.orca.ext.*
 import com.netflix.spinnaker.orca.pipeline.StageDefinitionBuilderFactory
 import com.netflix.spinnaker.orca.pipeline.graph.StageGraphBuilder
 import com.netflix.spinnaker.orca.pipeline.model.Stage
@@ -82,6 +79,50 @@ class CompleteStageHandler(
 ) : OrcaMessageHandler<CompleteStage>, StageBuilderAware, ExpressionAware, AuthenticationAware {
 
   override fun handle(message: CompleteStage) {
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  private fun handleLightweight(message: CompleteStage) {
+    message.withStageLightweight { stage ->
+      if (stage.status in setOf(RUNNING, NOT_STARTED)) {
+        var status = stage.determineStatusLightweight()
+        try {
+          if (status == NOT_STARTED) {
+            status = SKIPPED
+          }
+
+          stage.status = status
+          stage.endTime = clock.millis()
+        } catch (e: Exception) {
+          log.error("Failed to construct after stages for ${stage.name} ${stage.id}", e)
+
+          val exceptionDetails = exceptionHandlers.shouldRetry(e, stage.name + ":ConstructAfterStages")
+          stage.context["exception"] = exceptionDetails
+          stage.status = TERMINAL
+          stage.endTime = clock.millis()
+        }
+
+        repository.storeStage(stage)
+
+        if (stage.status in listOf(SUCCEEDED, FAILED_CONTINUE, SKIPPED)) {
+          stage.startNext(true)
+        } else {
+          queue.push(CancelStage(message, true))
+          if (stage.syntheticStageOwner == null) {
+            queue.push(CompleteExecution(message, true))
+          }
+        }
+
+        publisher.publishEvent(StageComplete(this, stage))
+      }
+    }
+  }
+
+  private fun handleNative(message: CompleteStage) {
     message.withStage { stage ->
       if (stage.status in setOf(RUNNING, NOT_STARTED)) {
         var status = stage.determineStatus()
@@ -159,7 +200,7 @@ class CompleteStageHandler(
         publisher.publishEvent(StageComplete(this, stage))
         trackResult(stage)
       }
-    }
+      }
   }
 
   // TODO: this should be done out of band by responding to the StageComplete event
@@ -257,6 +298,24 @@ class CompleteStageHandler(
       }
   }
 
+  private fun Stage.determineStatusLightweight(): ExecutionStatus {
+    val taskStatuses = tasks.map(Task::getStatus)
+    val planningStatus = if (hasPlanningFailureLightweight()) listOf(failureStatusLightweight()) else emptyList()
+    val allStatuses =  taskStatuses + planningStatus
+    return when {
+      allStatuses.isEmpty() -> NOT_STARTED
+      allStatuses.contains(TERMINAL) -> failureStatusLightweight() // handle configured 'if stage fails' options correctly
+      allStatuses.contains(STOPPED) -> STOPPED
+      allStatuses.contains(CANCELED) -> CANCELED
+      allStatuses.contains(FAILED_CONTINUE) -> FAILED_CONTINUE
+      allStatuses.all { it == SUCCEEDED } -> SUCCEEDED
+      else -> {
+        log.error("Unhandled condition for stage $id of $execution.id, marking as TERMINAL. taskStatuses=$taskStatuses, planningStatus=$planningStatus")
+        TERMINAL
+      }
+    }
+  }
+
   private fun Stage.determineStatus(): ExecutionStatus {
     val syntheticStatuses = syntheticStages().map(Stage::getStatus)
     val taskStatuses = tasks.map(Task::getStatus)
@@ -278,6 +337,9 @@ class CompleteStageHandler(
     }
   }
 }
+
+private fun Stage.hasPlanningFailureLightweight() =
+  getCurrentOnly("beforeStagePlanningFailed", false) == true
 
 private fun Stage.hasPlanningFailure() =
   context["beforeStagePlanningFailed"] == true

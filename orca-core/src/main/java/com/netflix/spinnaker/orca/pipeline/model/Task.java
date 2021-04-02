@@ -21,6 +21,8 @@ import static com.netflix.spinnaker.orca.ExecutionStatus.NOT_STARTED;
 import com.netflix.spinnaker.orca.ExecutionStatus;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.List;
 
 /** A "task" is a component piece of a stage */
 public class Task {
@@ -122,5 +124,25 @@ public class Task {
 
   public void setLoopEnd(boolean loopEnd) {
     this.loopEnd = loopEnd;
+  }
+
+  private List<String> logs = new ArrayList<>();
+
+  public List<String> getLogs() {
+    return logs;
+  }
+
+  public void setLogs(List<String> logs) {
+    this.logs = logs;
+  }
+
+  private List<String> failureMessages = new ArrayList<>();
+
+  public List<String> getFailureMessages() {
+    return failureMessages;
+  }
+
+  public void setFailureMessages(List<String> failureMessages) {
+    this.failureMessages = failureMessages;
   }
 }

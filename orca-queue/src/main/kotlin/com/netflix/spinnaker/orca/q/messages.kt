@@ -39,6 +39,11 @@ interface ApplicationAware {
 interface ExecutionLevel : ApplicationAware {
   val executionType: ExecutionType
   val executionId: String
+  /**
+   * true: just retrieve lightweight execution.
+   * false: retrieve execution normally.
+   */
+  val lightweight: Boolean
 }
 
 interface StageLevel : ExecutionLevel {
@@ -55,16 +60,17 @@ data class StartTask(
   override val executionId: String,
   override val application: String,
   override val stageId: String,
-  override val taskId: String
+  override val taskId: String,
+  override val lightweight: Boolean = false
 ) : Message(), TaskLevel {
-  constructor(source: ExecutionLevel, stageId: String, taskId: String) :
-    this(source.executionType, source.executionId, source.application, stageId, taskId)
+  constructor(source: ExecutionLevel, stageId: String, taskId: String, lightweight: Boolean = false) :
+    this(source.executionType, source.executionId, source.application, stageId, taskId, lightweight)
 
-  constructor(source: StageLevel, taskId: String) :
-    this(source, source.stageId, taskId)
+  constructor(source: StageLevel, taskId: String, lightweight: Boolean = false) :
+    this(source, source.stageId, taskId, lightweight)
 
-  constructor(source: Stage, taskId: String) :
-    this(source.execution.type, source.execution.id, source.execution.application, source.id, taskId)
+  constructor(source: Stage, taskId: String, lightweight: Boolean = false) :
+    this(source.execution.type, source.execution.id, source.execution.application, source.id, taskId, lightweight)
 
   constructor(source: Stage, task: com.netflix.spinnaker.orca.pipeline.model.Task) :
     this(source.execution.type, source.execution.id, source.execution.application, source.id, task.id)
@@ -78,12 +84,13 @@ data class CompleteTask(
   override val stageId: String,
   override val taskId: String,
   val status: ExecutionStatus,
-  val originalStatus: ExecutionStatus?
+  val originalStatus: ExecutionStatus?,
+  override val lightweight: Boolean = false
 ) : Message(), TaskLevel {
-  constructor(source: TaskLevel, status: ExecutionStatus) :
-    this(source, status, status)
+  constructor(source: TaskLevel, status: ExecutionStatus, lightweight: Boolean = false) :
+    this(source, status, status, lightweight)
 
-  constructor(source: TaskLevel, status: ExecutionStatus, originalStatus: ExecutionStatus) :
+  constructor(source: TaskLevel, status: ExecutionStatus, originalStatus: ExecutionStatus, lightweight: Boolean = false) :
     this(
       source.executionType,
       source.executionId,
@@ -91,7 +98,8 @@ data class CompleteTask(
       source.stageId,
       source.taskId,
       status,
-      originalStatus
+      originalStatus,
+      lightweight
     )
 }
 
@@ -101,10 +109,11 @@ data class PauseTask(
   override val executionId: String,
   override val application: String,
   override val stageId: String,
-  override val taskId: String
+  override val taskId: String,
+  override val lightweight: Boolean = false
 ) : Message(), TaskLevel {
-  constructor(message: TaskLevel) :
-    this(message.executionType, message.executionId, message.application, message.stageId, message.taskId)
+  constructor(message: TaskLevel, lightweight: Boolean = false) :
+    this(message.executionType, message.executionId, message.application, message.stageId, message.taskId, lightweight)
 }
 
 @JsonTypeName("resumeTask")
@@ -113,10 +122,11 @@ data class ResumeTask(
   override val executionId: String,
   override val application: String,
   override val stageId: String,
-  override val taskId: String
+  override val taskId: String,
+  override val lightweight: Boolean = false
 ) : Message(), TaskLevel {
   constructor(message: StageLevel, taskId: String) :
-    this(message.executionType, message.executionId, message.application, message.stageId, taskId)
+    this(message.executionType, message.executionId, message.application, message.stageId, taskId, message.lightweight)
 }
 
 @JsonTypeName("runTask")
@@ -126,18 +136,19 @@ data class RunTask(
   override val application: String,
   override val stageId: String,
   override val taskId: String,
-  val taskType: Class<out Task>
+  val taskType: Class<out Task>,
+  override val lightweight: Boolean = false
 ) : Message(), TaskLevel {
   override val ackTimeoutMs = Duration.ofMinutes(10).toMillis()
 
   constructor(message: StageLevel, taskId: String, taskType: Class<out Task>) :
-    this(message.executionType, message.executionId, message.application, message.stageId, taskId, taskType)
+    this(message.executionType, message.executionId, message.application, message.stageId, taskId, taskType, message.lightweight)
 
   constructor(message: TaskLevel, taskType: Class<out Task>) :
-    this(message.executionType, message.executionId, message.application, message.stageId, message.taskId, taskType)
+    this(message.executionType, message.executionId, message.application, message.stageId, message.taskId, taskType, message.lightweight)
 
   constructor(source: ExecutionLevel, stageId: String, taskId: String, taskType: Class<out Task>) :
-    this(source.executionType, source.executionId, source.application, stageId, taskId, taskType)
+    this(source.executionType, source.executionId, source.application, stageId, taskId, taskType, source.lightweight)
 }
 
 @JsonTypeName("startStage")
@@ -145,16 +156,17 @@ data class StartStage(
   override val executionType: ExecutionType,
   override val executionId: String,
   override val application: String,
-  override val stageId: String
+  override val stageId: String,
+  override val lightweight: Boolean = false
 ) : Message(), StageLevel {
   constructor(source: ExecutionLevel, stageId: String) :
-    this(source.executionType, source.executionId, source.application, stageId)
+    this(source.executionType, source.executionId, source.application, stageId, source.lightweight)
 
   constructor(source: StageLevel) :
     this(source, source.stageId)
 
-  constructor(source: Stage) :
-    this(source.execution.type, source.execution.id, source.execution.application, source.id)
+  constructor(source: Stage, lightweight: Boolean = false) :
+    this(source.execution.type, source.execution.id, source.execution.application, source.id, lightweight)
 }
 
 @JsonTypeName("continueParentStage")
@@ -166,7 +178,8 @@ data class ContinueParentStage(
   /**
    * The phase that just completed, either before or after stages.
    */
-  val phase: SyntheticStageOwner = STAGE_BEFORE
+  val phase: SyntheticStageOwner = STAGE_BEFORE,
+  override val lightweight: Boolean = false
 ) : Message(), StageLevel {
   constructor(source: StageLevel, phase: SyntheticStageOwner) :
     this(source.executionType, source.executionId, source.application, source.stageId, phase)
@@ -180,16 +193,17 @@ data class CompleteStage(
   override val executionType: ExecutionType,
   override val executionId: String,
   override val application: String,
-  override val stageId: String
+  override val stageId: String,
+  override val lightweight: Boolean = false
 ) : Message(), StageLevel {
   constructor(source: ExecutionLevel, stageId: String) :
     this(source.executionType, source.executionId, source.application, stageId)
 
-  constructor(source: StageLevel) :
-    this(source.executionType, source.executionId, source.application, source.stageId)
+  constructor(source: StageLevel, lightweight: Boolean = false) :
+    this(source.executionType, source.executionId, source.application, source.stageId, lightweight)
 
-  constructor(source: Stage) :
-    this(source.execution.type, source.execution.id, source.execution.application, source.id)
+  constructor(source: Stage, lightweight: Boolean = false) :
+    this(source.execution.type, source.execution.id, source.execution.application, source.id, lightweight)
 }
 
 @JsonTypeName("skipStage")
@@ -197,13 +211,14 @@ data class SkipStage(
   override val executionType: ExecutionType,
   override val executionId: String,
   override val application: String,
-  override val stageId: String
+  override val stageId: String,
+  override val lightweight: Boolean = false
 ) : Message(), StageLevel {
   constructor(source: StageLevel) :
     this(source.executionType, source.executionId, source.application, source.stageId)
 
-  constructor(source: Stage) :
-    this(source.execution.type, source.execution.id, source.execution.application, source.id)
+  constructor(source: Stage, lightweight: Boolean = false) :
+    this(source.execution.type, source.execution.id, source.execution.application, source.id, lightweight)
 }
 
 @JsonTypeName("abortStage")
@@ -211,7 +226,8 @@ data class AbortStage(
   override val executionType: ExecutionType,
   override val executionId: String,
   override val application: String,
-  override val stageId: String
+  override val stageId: String,
+  override val lightweight: Boolean = false
 ) : Message(), StageLevel {
   constructor(source: StageLevel) :
     this(source.executionType, source.executionId, source.application, source.stageId)
@@ -225,13 +241,14 @@ data class PauseStage(
   override val executionType: ExecutionType,
   override val executionId: String,
   override val application: String,
-  override val stageId: String
+  override val stageId: String,
+  override val lightweight: Boolean = false
 ) : Message(), StageLevel {
-  constructor(source: StageLevel) :
-    this(source, source.stageId)
+  constructor(source: StageLevel, lightweight: Boolean = false) :
+    this(source, source.stageId, lightweight)
 
-  constructor(source: ExecutionLevel, stageId: String) :
-    this(source.executionType, source.executionId, source.application, stageId)
+  constructor(source: ExecutionLevel, stageId: String, lightweight: Boolean = false) :
+    this(source.executionType, source.executionId, source.application, stageId, lightweight)
 }
 
 @JsonTypeName("restartStage")
@@ -240,10 +257,11 @@ data class RestartStage(
   override val executionId: String,
   override val application: String,
   override val stageId: String,
-  val user: String?
+  val user: String?,
+  override val lightweight: Boolean = false
 ) : Message(), StageLevel {
   constructor(source: Execution, stageId: String, user: String?) :
-    this(source.type, source.id, source.application, stageId, user)
+    this(source.type, source.id, source.application, stageId, user, source.isLightweight)
 
   constructor(stage: Stage, user: String?) :
     this(stage.execution.type, stage.execution.id, stage.execution.application, stage.id, user)
@@ -254,13 +272,14 @@ data class ResumeStage(
   override val executionType: ExecutionType,
   override val executionId: String,
   override val application: String,
-  override val stageId: String
+  override val stageId: String,
+  override val lightweight: Boolean = false
 ) : Message(), StageLevel {
   constructor(source: ExecutionLevel, stageId: String) :
-    this(source.executionType, source.executionId, source.application, stageId)
+    this(source.executionType, source.executionId, source.application, stageId, source.lightweight)
 
-  constructor(source: Stage) :
-    this(source.execution.type, source.execution.id, source.execution.application, source.id)
+  constructor(source: Stage, lightweight: Boolean = false) :
+    this(source.execution.type, source.execution.id, source.execution.application, source.id, lightweight)
 }
 
 @JsonTypeName("cancelStage")
@@ -268,56 +287,61 @@ data class CancelStage(
   override val executionType: ExecutionType,
   override val executionId: String,
   override val application: String,
-  override val stageId: String
+  override val stageId: String,
+  override val lightweight: Boolean = false
 ) : Message(), StageLevel {
-  constructor(source: StageLevel) :
-    this(source.executionType, source.executionId, source.application, source.stageId)
+  constructor(source: StageLevel, lightweight: Boolean = false) :
+    this(source.executionType, source.executionId, source.application, source.stageId, lightweight)
 
-  constructor(stage: Stage) :
-    this(stage.execution.type, stage.execution.id, stage.execution.application, stage.id)
+  constructor(stage: Stage, lightweight: Boolean = false) :
+    this(stage.execution.type, stage.execution.id, stage.execution.application, stage.id, lightweight)
 }
 
 @JsonTypeName("startExecution")
 data class StartExecution(
   override val executionType: ExecutionType,
   override val executionId: String,
-  override val application: String
+  override val application: String,
+  override val lightweight: Boolean = false
 ) : Message(), ExecutionLevel {
   constructor(source: Execution) :
-    this(source.type, source.id, source.application)
+    this(source.type, source.id, source.application, source.isLightweight)
 }
 
 @JsonTypeName("rescheduleExecution")
 data class RescheduleExecution(
   override val executionType: ExecutionType,
   override val executionId: String,
-  override val application: String
+  override val application: String,
+  override val lightweight: Boolean = false
 ) : Message(), ExecutionLevel {
   constructor(source: Execution) :
-    this(source.type, source.id, source.application)
+    this(source.type, source.id, source.application, source.isLightweight)
 }
 
 @JsonTypeName("completeExecution")
 data class CompleteExecution(
   override val executionType: ExecutionType,
   override val executionId: String,
-  override val application: String
+  override val application: String,
+  override val lightweight: Boolean = false
 ) : Message(), ExecutionLevel {
-  constructor(source: ExecutionLevel) :
-    this(source.executionType, source.executionId, source.application)
+  constructor(source: ExecutionLevel, lightweight: Boolean = false) :
+    this(source.executionType, source.executionId, source.application, lightweight)
 
-  constructor(source: Execution) :
-    this(source.type, source.id, source.application)
+  constructor(source: Execution, lightweight: Boolean = false) :
+    this(source.type, source.id, source.application, lightweight)
 }
 
 @JsonTypeName("resumeExecution")
 data class ResumeExecution(
   override val executionType: ExecutionType,
   override val executionId: String,
-  override val application: String
+  override val application: String,
+  override val lightweight: Boolean = false
 ) : Message(), ExecutionLevel {
   constructor(source: Execution) :
-    this(source.type, source.id, source.application)
+    this(source.type, source.id, source.application, source.isLightweight)
 }
 
 @JsonTypeName("cancelExecution")
@@ -326,10 +350,11 @@ data class CancelExecution(
   override val executionId: String,
   override val application: String,
   val user: String?,
-  val reason: String?
+  val reason: String?,
+  override val lightweight: Boolean = false
 ) : Message(), ExecutionLevel {
   constructor(source: Execution, user: String?, reason: String?) :
-    this(source.type, source.id, source.application, user, reason)
+    this(source.type, source.id, source.application, user, reason, source.isLightweight)
 
   constructor(source: Execution) :
     this(source.type, source.id, source.application, null, null)
@@ -356,7 +381,8 @@ sealed class ConfigurationError : Message(), ExecutionLevel
 data class InvalidExecutionId(
   override val executionType: ExecutionType,
   override val executionId: String,
-  override val application: String
+  override val application: String,
+  override val lightweight: Boolean = false
 ) : ConfigurationError() {
   constructor(source: ExecutionLevel) :
     this(source.executionType, source.executionId, source.application)
@@ -370,7 +396,8 @@ data class InvalidStageId(
   override val executionType: ExecutionType,
   override val executionId: String,
   override val application: String,
-  override val stageId: String
+  override val stageId: String,
+  override val lightweight: Boolean = false
 ) : ConfigurationError(), StageLevel {
   constructor(source: StageLevel) :
     this(source.executionType, source.executionId, source.application, source.stageId)
@@ -385,7 +412,8 @@ data class InvalidTaskId(
   override val executionId: String,
   override val application: String,
   override val stageId: String,
-  override val taskId: String
+  override val taskId: String,
+  override val lightweight: Boolean = false
 ) : ConfigurationError(), TaskLevel {
   constructor(source: TaskLevel) :
     this(source.executionType, source.executionId, source.application, source.stageId, source.taskId)
@@ -400,7 +428,8 @@ data class InvalidTaskType(
   override val executionId: String,
   override val application: String,
   override val stageId: String,
-  val className: String
+  val className: String,
+  override val lightweight: Boolean = false
 ) : ConfigurationError(), StageLevel {
   constructor(source: StageLevel, className: String) :
     this(source.executionType, source.executionId, source.application, source.stageId, className)
@@ -412,10 +441,11 @@ data class NoDownstreamTasks(
   override val executionId: String,
   override val application: String,
   override val stageId: String,
-  override val taskId: String
+  override val taskId: String,
+  override val lightweight: Boolean = false
 ) : ConfigurationError(), TaskLevel {
-  constructor(source: TaskLevel) :
-    this(source.executionType, source.executionId, source.application, source.stageId, source.taskId)
+  constructor(source: TaskLevel, lightweight: Boolean = false) :
+    this(source.executionType, source.executionId, source.application, source.stageId, source.taskId, lightweight)
 }
 
 @Deprecated("Kept only to support old messages on the queue without having to do a migration")

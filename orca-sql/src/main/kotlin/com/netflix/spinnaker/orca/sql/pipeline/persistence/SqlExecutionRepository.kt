@@ -292,7 +292,11 @@ class SqlExecutionRepository(
     }
   }
 
-  override fun retrieveStageWithoutExecution(type: ExecutionType, id: String, stageId: String): Stage {
+  override fun retrieveAllStagesLightweight(type: ExecutionType, id: String): MutableCollection<Stage> {
+    TODO("Not yet implemented")
+  }
+
+  override fun retrieveStageLightweight(type: ExecutionType, id: String, stageId: String): Stage {
     TODO("Not yet implemented")
   }
 

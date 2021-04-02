@@ -139,8 +139,18 @@ inline fun <reified O> Stage.mapTo(pointer: String): O = mapTo(pointer, O::class
 
 inline fun <reified O> Stage.mapTo(): O = mapTo(O::class.java)
 
+fun Stage.shouldFailPipelineLightweight(): Boolean =
+  shouldFailPipeline in listOf(null, true)
+
 fun Stage.shouldFailPipeline(): Boolean =
   context["failPipeline"] in listOf(null, true)
+
+fun Stage.failureStatusLightweight(default: ExecutionStatus = TERMINAL) =
+  when {
+    continuePipelineOnFailure -> FAILED_CONTINUE
+    shouldFailPipelineLightweight() -> default
+    else -> STOPPED
+  }
 
 fun Stage.failureStatus(default: ExecutionStatus = TERMINAL) =
   when {
@@ -148,6 +158,10 @@ fun Stage.failureStatus(default: ExecutionStatus = TERMINAL) =
     shouldFailPipeline() -> default
     else -> STOPPED
   }
+
+fun Stage.isManuallySkippedLightweight(): Boolean {
+  return getCurrentOnly("manualSkip", false) == true
+}
 
 fun Stage.isManuallySkipped(): Boolean {
   return context["manualSkip"] == true || parent?.isManuallySkipped() == true

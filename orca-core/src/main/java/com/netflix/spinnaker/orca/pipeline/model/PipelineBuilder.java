@@ -104,6 +104,11 @@ public class PipelineBuilder {
     return this;
   }
 
+  public PipelineBuilder withLightweight(boolean lightweight) {
+    pipeline.setLightweight(lightweight);
+    return this;
+  }
+
   public PipelineBuilder withLimitConcurrent(boolean concurrent) {
     pipeline.setLimitConcurrent(concurrent);
     return this;

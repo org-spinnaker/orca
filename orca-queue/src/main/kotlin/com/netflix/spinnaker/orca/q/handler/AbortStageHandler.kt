@@ -41,6 +41,27 @@ class AbortStageHandler(
 ) : OrcaMessageHandler<AbortStage> {
 
   override fun handle(message: AbortStage) {
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  private fun handleLightweight(message: AbortStage) {
+    message.withStageLightweight { stage ->
+      if (stage.status in setOf(RUNNING, NOT_STARTED)) {
+        stage.status = TERMINAL
+        stage.endTime = clock.millis()
+        repository.storeStage(stage)
+        queue.push(CancelStage(message, message.lightweight))
+        queue.push(CompleteExecution(message, message.lightweight))
+        publisher.publishEvent(StageComplete(this, stage))
+      }
+    }
+  }
+
+  private fun handleNative(message: AbortStage) {
     message.withStage { stage ->
       if (stage.status in setOf(RUNNING, NOT_STARTED)) {
         stage.status = TERMINAL

@@ -24,6 +24,7 @@ import com.netflix.spinnaker.orca.ExecutionStatus.SUCCEEDED
 import com.netflix.spinnaker.orca.ExecutionStatus.TERMINAL
 import com.netflix.spinnaker.orca.events.StageComplete
 import com.netflix.spinnaker.orca.ext.isManuallySkipped
+import com.netflix.spinnaker.orca.ext.isManuallySkippedLightweight
 import com.netflix.spinnaker.orca.ext.recursiveSyntheticStages
 import com.netflix.spinnaker.orca.pipeline.persistence.ExecutionRepository
 import com.netflix.spinnaker.orca.q.SkipStage
@@ -41,6 +42,26 @@ class SkipStageHandler(
   private val clock: Clock
 ) : OrcaMessageHandler<SkipStage> {
   override fun handle(message: SkipStage) {
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  private fun handleLightweight(message: SkipStage) {
+    message.withStageLightweight { stage ->
+      if (stage.status in setOf(RUNNING, NOT_STARTED) || stage.isManuallySkippedLightweight()) {
+        stage.status = SKIPPED
+        stage.endTime = clock.millis()
+        repository.storeStage(stage)
+        stage.startNext()
+        publisher.publishEvent(StageComplete(this, stage))
+      }
+    }
+  }
+
+  private fun handleNative(message: SkipStage) {
     message.withStage { stage ->
       if (stage.status in setOf(RUNNING, NOT_STARTED) || stage.isManuallySkipped()) {
         stage.status = SKIPPED

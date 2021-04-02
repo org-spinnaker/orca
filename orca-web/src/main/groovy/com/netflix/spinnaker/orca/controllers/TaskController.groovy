@@ -470,8 +470,8 @@ class TaskController {
   Execution updatePipelineStage(
     @PathVariable String id,
     @PathVariable String stageId, @RequestBody Map context) {
-    def pipeline = executionRepository.retrieve(PIPELINE, id)
-    def stage = pipeline.stages.find { it.id == stageId }
+    def stage = executionRepository.retrieveStageLightweight(PIPELINE, id, stageId)
+    def pipeline = stage.execution
     if (stage) {
       stage.context.putAll(context)
       validateStageUpdate(stage)

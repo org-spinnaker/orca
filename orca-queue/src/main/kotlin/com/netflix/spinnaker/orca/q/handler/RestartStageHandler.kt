@@ -45,6 +45,25 @@ class RestartStageHandler(
   private val log: Logger get() = LoggerFactory.getLogger(javaClass)
 
   override fun handle(message: RestartStage) {
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  private fun handleLightweight(message: RestartStage) {
+    message.withStageLightweight { stage ->
+      if (stage.status.isComplete) {
+        stage.addRestartDetails(message.user)
+        stage.resetLightweight()
+        repository.updateStatus(stage.execution.type, stage.execution.id, RUNNING)
+        queue.push(StartStage(message))
+      }
+    }
+  }
+
+  private fun handleNative(message: RestartStage) {
     message.withStage { stage ->
       if (stage.execution.shouldQueue()) {
         // this pipeline is already running and has limitConcurrent = true
@@ -101,6 +120,18 @@ class RestartStageHandler(
       "restartTime" to clock.millis(),
       "previousException" to context.remove("exception")
     )
+  }
+
+  private fun Stage.resetLightweight() {
+    // only reset current stage, no downstream stages
+    if (status.isComplete) {
+      status = NOT_STARTED
+      startTime = null
+      endTime = null
+      tasks = emptyList()
+      builder().prepareStageForRestart(this)
+      repository.storeStage(this)
+    }
   }
 
   private fun Stage.reset() {

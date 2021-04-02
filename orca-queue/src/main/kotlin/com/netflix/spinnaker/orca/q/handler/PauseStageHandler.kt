@@ -31,6 +31,21 @@ class PauseStageHandler(
   override val messageType = PauseStage::class.java
 
   override fun handle(message: PauseStage) {
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  private fun handleLightweight(message: PauseStage) {
+    message.withStageLightweight { stage ->
+      stage.status = PAUSED
+      repository.storeStage(stage)
+    }
+  }
+
+  private fun handleNative(message: PauseStage) {
     message.withStage { stage ->
       stage.status = PAUSED
       repository.storeStage(stage)

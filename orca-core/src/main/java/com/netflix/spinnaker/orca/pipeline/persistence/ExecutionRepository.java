@@ -39,6 +39,83 @@ public interface ExecutionRepository {
 
   void addStage(@Nonnull Stage stage);
 
+  /**
+   * Retrieve all stages(each stage including just a few attributes: id, status, parentStageId, tasks)
+   * with lightweight execution(including just a few attributes: type/id/application/lightweight/canceled/status/name/pipelineConfigId).
+   *
+   * @param type
+   * @param id
+   * @return
+   * @throws ExecutionNotFoundException
+   */
+  @Nonnull
+  Collection<Stage> retrieveAllStagesLightweight(@Nonnull ExecutionType type,
+                                                 @Nonnull String id) throws ExecutionNotFoundException;
+
+  /**
+   * Retrieve stage(including all attributes) with lightweight execution(including just a few attributes:
+   * type/id/application/lightweight/canceled/status/name/pipelineConfigId).
+   *
+   * @param type
+   * @param id
+   * @param stageId
+   * @return
+   */
+  @Nonnull
+  Stage retrieveStageLightweight(@Nonnull ExecutionType type,
+                                 @Nonnull String id,
+                                 @Nonnull String stageId);
+
+  /**
+   * Retrieve initial stages with just a few attributes:
+   * <ul>
+   *   <li>id</li>
+   *   <li>status</li>
+   *   <li>execution(type, id, application)</li>
+   * </ul>
+   * @param type
+   * @param id
+   * @return
+   * @throws ExecutionNotFoundException
+   */
+  @Nonnull
+  Collection<Stage> retrieveInitialStages(@Nonnull ExecutionType type,
+                                          @Nonnull String id) throws ExecutionNotFoundException;
+
+  /**
+   * Retrieve one stage's upstream stages with just a few attributes:
+   * <ul>
+   *   <li>id</li>
+   *   <li>status</li>
+   *   <li>execution(type, id, application)</li>
+   * </ul>
+   * @param type
+   * @param id
+   * @param stageId
+   * @return
+   */
+  @Nonnull
+  Collection<Stage> retrieveUpstreamStages(@Nonnull ExecutionType type,
+                                           @Nonnull String id,
+                                           @Nonnull String stageId);
+
+  /**
+   * Retrieve one stage's downstream stages with just a few attributes:
+   * <ul>
+   *   <li>id</li>
+   *   <li>status</li>
+   *   <li>execution(type, id, application)</li>
+   * </ul>
+   * @param type
+   * @param id
+   * @param stageId
+   * @return
+   */
+  @Nonnull
+  Collection<Stage> retrieveDownstreamStages(@Nonnull ExecutionType type,
+                                             @Nonnull String id,
+                                             @Nonnull String stageId);
+
   @Instrumented(metricName = "cancelNullReason")
   void cancel(@Nonnull ExecutionType type, @Nonnull String id);
 
@@ -63,40 +140,13 @@ public interface ExecutionRepository {
 
   void updateStatus(ExecutionType type, @Nonnull String id, @Nonnull ExecutionStatus status);
 
-  /**
-   * Retrieve stage without execution.
-   *
-   * @param type
-   * @param id
-   * @param stageId
-   * @return
-   */
-  @Nonnull
-  Stage retrieveStageWithoutExecution(@Nonnull ExecutionType type,
-                                      @Nonnull String id,
-                                      @Nonnull String stageId);
-
-  @Nonnull
-  Collection<Stage> retrieveInitialStages(@Nonnull ExecutionType type,
-                                          @Nonnull String id) throws ExecutionNotFoundException;
-
-  @Nonnull
-  Collection<Stage> retrieveUpstreamStages(@Nonnull ExecutionType type,
-                                           @Nonnull String id,
-                                           @Nonnull String stageId);
-
-  @Nonnull
-  Collection<Stage> retrieveDownstreamStages(@Nonnull ExecutionType type,
-                                             @Nonnull String id,
-                                             @Nonnull String stageId);
-
   @Nonnull
   @Instrumented(metricName = "retrieveById")
   Execution retrieve(@Nonnull ExecutionType type, @Nonnull String id)
       throws ExecutionNotFoundException;
 
   /**
-   * Retrieve execution with just a few attributes, without stages.
+   * Retrieve execution with just a few attributes(type/id/application/lightweight/canceled/status/name/pipelineConfigId), without stages.
    *
    * @param type see {@link ExecutionType}
    * @param id see {@link Execution#getId()}

@@ -45,6 +45,45 @@ class CancelStageHandler(
   override val messageType = CancelStage::class.java
 
   override fun handle(message: CancelStage) {
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  private fun handleLightweight(message: CancelStage) {
+    message.withStageLightweight { stage ->
+      if (stage.status == RUNNING) {
+        stage.tasks
+          .filter { it.status == RUNNING }
+          .forEach {
+            queue.reschedule(
+              RunTask(
+                stage.execution.type,
+                stage.execution.id,
+                stage.execution.application,
+                stage.id,
+                it.id,
+                it.type,
+                message.lightweight
+              )
+            )
+          }
+      }
+      if (stage.status.isHalt) {
+        stage.builder().let { builder ->
+          if (builder is CancellableStage) {
+            executor.execute {
+              builder.cancel(stage)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private fun handleNative(message: CancelStage) {
     message.withStage { stage ->
       /**
        * When an execution ends with status !SUCCEEDED, still-running stages

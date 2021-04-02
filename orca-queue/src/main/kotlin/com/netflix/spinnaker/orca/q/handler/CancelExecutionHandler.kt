@@ -37,6 +37,27 @@ class CancelExecutionHandler(
   override val messageType = CancelExecution::class.java
 
   override fun handle(message: CancelExecution) {
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  private fun handleLightweight(message: CancelExecution) {
+    message.withExecutionLightweight { execution ->
+      repository.cancel(execution.type, execution.id, message.user, message.reason)
+      repository.retrieveAllStagesLightweight(message.executionType, message.executionId)
+        .filter { it.status == PAUSED }
+        .forEach { stage ->
+          queue.push(ResumeStage(stage, message.lightweight))
+        }
+      queue.push(RescheduleExecution(execution))
+      publisher.publishEvent(ExecutionComplete(this, message.executionType, message.executionId, CANCELED))
+    }
+  }
+
+  private fun handleNative(message: CancelExecution) {
     message.withExecution { execution ->
       repository.cancel(execution.type, execution.id, message.user, message.reason)
 

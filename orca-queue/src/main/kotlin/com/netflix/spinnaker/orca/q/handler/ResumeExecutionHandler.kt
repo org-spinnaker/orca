@@ -32,6 +32,20 @@ class ResumeExecutionHandler(
   override val messageType = ResumeExecution::class.java
 
   override fun handle(message: ResumeExecution) {
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  private fun handleLightweight(message: ResumeExecution) {
+    repository.retrieveAllStagesLightweight(message.executionType, message.executionId)
+      .filter { it.status == PAUSED }
+      .forEach { queue.push(ResumeStage(message, it.id)) }
+  }
+
+  private fun handleNative(message: ResumeExecution) {
     message.withExecution { execution ->
       execution
         .stages

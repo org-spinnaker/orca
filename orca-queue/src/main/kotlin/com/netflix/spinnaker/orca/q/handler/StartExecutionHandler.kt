@@ -54,7 +54,31 @@ class StartExecutionHandler(
   private val log: Logger get() = LoggerFactory.getLogger(javaClass)
 
   override fun handle(message: StartExecution) {
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  /**
+   * simplified logic
+   */
+  private fun handleLightweight(message: StartExecution) {
     message.withExecutionLightweight { execution ->
+      if (execution.status == NOT_STARTED && !execution.isCanceled) {
+        startLightweight(execution)
+      } else {
+        terminate(execution)
+      }
+    }
+  }
+
+  /**
+   * native logic
+   */
+  private fun handleNative(message: StartExecution) {
+    message.withExecution { execution ->
       if (execution.status == NOT_STARTED && !execution.isCanceled) {
         if (execution.shouldQueue()) {
           execution.pipelineConfigId?.let {
@@ -67,6 +91,19 @@ class StartExecutionHandler(
       } else {
         terminate(execution)
       }
+    }
+  }
+
+  private fun startLightweight(execution: Execution) {
+    val initialStages = repository.retrieveInitialStages(execution.type, execution.id)
+    if (initialStages.isEmpty()) {
+      log.warn("No initial stages found (executionId: ${execution.id})")
+      repository.updateStatus(execution.type, execution.id, TERMINAL)
+      publisher.publishEvent(ExecutionComplete(this, execution.type, execution.id, TERMINAL))
+    } else {
+      repository.updateStatus(execution.type, execution.id, RUNNING)
+      initialStages.forEach { queue.push(StartStage(it, true)) }
+      publisher.publishEvent(ExecutionStarted(this, execution.type, execution.id))
     }
   }
 
@@ -84,10 +121,7 @@ class StartExecutionHandler(
         "Could not begin execution before start time expiry"
       ))
     } else {
-      //yuanchaochao-begin
-//      val initialStages = execution.initialStages()
       val initialStages = repository.retrieveInitialStages(execution.type, execution.id)
-      //yuanchaochao-end
       if (initialStages.isEmpty()) {
         log.warn("No initial stages found (executionId: ${execution.id})")
         repository.updateStatus(execution.type, execution.id, TERMINAL)

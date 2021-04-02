@@ -42,6 +42,24 @@ class StartTaskHandler(
 ) : OrcaMessageHandler<StartTask>, ExpressionAware {
 
   override fun handle(message: StartTask) {
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  private fun handleLightweight(message: StartTask) {
+    message.withTaskLightweight { stage, task ->
+      task.status = RUNNING
+      task.startTime = clock.millis()
+      repository.storeStage(stage)
+
+      queue.push(RunTask(message, task.id, task.type))
+    }
+  }
+
+  private fun handleNative(message: StartTask) {
     message.withTask { stage, task ->
       task.status = RUNNING
       task.startTime = clock.millis()
@@ -51,7 +69,7 @@ class StartTaskHandler(
       queue.push(RunTask(message, task.id, task.type))
 
       publisher.publishEvent(TaskStarted(this, mergedContextStage, task))
-    }
+      }
   }
 
   override val messageType = StartTask::class.java

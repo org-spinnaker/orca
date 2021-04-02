@@ -57,6 +57,34 @@ class CompleteExecutionHandler(
   private val completedId = registry.createId("executions.completed")
 
   override fun handle(message: CompleteExecution) {
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  private fun handleLightweight(message: CompleteExecution) {
+    message.withExecutionLightweight { execution ->
+      if (execution.status.isComplete) {
+        log.info("Execution ${execution.id} already completed with ${execution.status} status")
+      } else {
+        message.determineFinalStatusLightweight(execution) { status ->
+          repository.updateStatus(execution.type, message.executionId, status)
+          publisher.publishEvent(
+            ExecutionComplete(this, message.executionType, message.executionId, status)
+          )
+          if (status != SUCCEEDED) {
+            execution.topLevelStagesLightweight.filter { it.status == RUNNING }.forEach {
+              queue.push(CancelStage(it, message.lightweight))
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private fun handleNative(message: CompleteExecution) {
     message.withExecution { execution ->
       if (execution.status.isComplete) {
         log.info("Execution ${execution.id} already completed with ${execution.status} status")
@@ -85,6 +113,25 @@ class CompleteExecutionHandler(
     }
   }
 
+  private fun CompleteExecution.determineFinalStatusLightweight(
+    execution: Execution,
+    block: (ExecutionStatus) -> Unit
+  ) {
+    execution.topLevelStagesLightweight.let { stages ->
+      if (stages.map { it.status }.all { it in setOf(SUCCEEDED, SKIPPED, FAILED_CONTINUE) }) {
+        block.invoke(SUCCEEDED)
+      } else if (stages.any { it.status == TERMINAL }) {
+        block.invoke(TERMINAL)
+      } else if (stages.any { it.status == CANCELED }) {
+        block.invoke(CANCELED)
+      } else {
+        val attempts = getAttribute<AttemptsAttribute>()?.attempts ?: 0
+        log.info("Re-queuing $this as the execution is not yet complete (attempts: $attempts)")
+        queue.push(this, retryDelay)
+      }
+    }
+  }
+
   private fun CompleteExecution.determineFinalStatus(
     execution: Execution,
     block: (ExecutionStatus) -> Unit
@@ -105,6 +152,9 @@ class CompleteExecutionHandler(
       }
     }
   }
+
+  private val Execution.topLevelStagesLightweight
+    get(): List<Stage> = repository.retrieveAllStagesLightweight(type, id).filter { it.parentStageId == null }
 
   private val Execution.topLevelStages
     get(): List<Stage> = stages.filter { it.parentStageId == null }

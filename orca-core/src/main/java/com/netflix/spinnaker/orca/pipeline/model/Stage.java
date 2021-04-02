@@ -44,6 +44,8 @@ import com.netflix.spinnaker.orca.ExecutionStatus;
 import com.netflix.spinnaker.orca.jackson.OrcaObjectMapper;
 import com.netflix.spinnaker.orca.pipeline.model.support.RequisiteStageRefIdDeserializer;
 import de.huxhorn.sulky.ulid.ULID;
+import org.jetbrains.annotations.NotNull;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -851,6 +853,18 @@ public class Stage implements Serializable {
   @JsonIgnore
   public Optional<Long> getTimeout() {
     Object timeout = getContext().get(STAGE_TIMEOUT_OVERRIDE_KEY);
+    return getTimeout(timeout);
+  }
+
+  @JsonIgnore
+  public Optional<Long> getTimeoutFromCurrentStageOnly() {
+    final StageContext context = (StageContext) getContext();
+    Object timeout = context.getCurrentOnly(STAGE_TIMEOUT_OVERRIDE_KEY, "");
+    return getTimeout(timeout);
+  }
+
+  @NotNull
+  private Optional<Long> getTimeout(Object timeout) {
     if (timeout instanceof Integer) {
       return Optional.of((Integer) timeout).map(Integer::longValue);
     } else if (timeout instanceof Long) {
@@ -902,6 +916,18 @@ public class Stage implements Serializable {
   public boolean getContinuePipelineOnFailure() {
     StageContext context = (StageContext) getContext();
     return (boolean) context.getCurrentOnly("continuePipeline", false);
+  }
+
+  @JsonIgnore
+  public Object getShouldFailPipeline() {
+    StageContext context = (StageContext) getContext();
+    return context.getCurrentOnly("failPipeline", null);
+  }
+
+  @JsonIgnore
+  public Object getCurrentOnly(@Nullable Object key, Object defaultValue) {
+    StageContext context = (StageContext) getContext();
+    return context.getCurrentOnly(key, defaultValue);
   }
 
   public static class LastModifiedDetails implements Serializable {

@@ -306,6 +306,7 @@ public class ExecutionLauncher {
     return new PipelineBuilder(getString(config, "application"))
         .withId(getString(config, "executionId"))
         .withName(getString(config, "name"))
+        .withLightweight(getBoolean(config, "lightweight"))
         .withPipelineConfigId(getString(config, "id"))
         .withTrigger(objectMapper.convertValue(config.get("trigger"), Trigger.class))
         .withStages((List<Map<String, Object>>) config.get("stages"))

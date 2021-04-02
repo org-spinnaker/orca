@@ -137,9 +137,15 @@ class RedisInstrumentedExecutionRepository(
     }
   }
 
-  override fun retrieveStageWithoutExecution(type: Execution.ExecutionType, id: String, stageId: String): Stage {
-    return withMetrics("retrieveStageWithoutExecution") {
-      executionRepository.retrieveStageWithoutExecution(type, id, stageId)
+  override fun retrieveAllStagesLightweight(type: Execution.ExecutionType, id: String): MutableCollection<Stage> {
+    return withMetrics("retrieveAllStagesLightweight") {
+      executionRepository.retrieveAllStagesLightweight(type, id)
+    }
+  }
+
+  override fun retrieveStageLightweight(type: Execution.ExecutionType, id: String, stageId: String): Stage {
+    return withMetrics("retrieveStageLightweight") {
+      executionRepository.retrieveStageLightweight(type, id, stageId)
     }
   }
 

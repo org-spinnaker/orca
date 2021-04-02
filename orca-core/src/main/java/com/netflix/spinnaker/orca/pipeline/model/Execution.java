@@ -94,6 +94,22 @@ public class Execution implements Serializable {
     this.application = application;
   }
 
+  /**
+   * <ul>
+   *   <li>true: just retrieve lightweight execution.</li>
+   *   <li>false: retrieve execution normally.</li>
+   * </ul>
+   */
+  private boolean lightweight = false;
+
+  public boolean isLightweight() {
+    return lightweight;
+  }
+
+  public void setLightweight(boolean lightweight) {
+    this.lightweight = lightweight;
+  }
+
   private String name;
 
   public @Nullable String getName() {

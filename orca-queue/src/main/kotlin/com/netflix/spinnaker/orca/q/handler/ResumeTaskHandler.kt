@@ -19,6 +19,7 @@ package com.netflix.spinnaker.orca.q.handler
 import com.netflix.spinnaker.orca.ExecutionStatus.PAUSED
 import com.netflix.spinnaker.orca.ExecutionStatus.RUNNING
 import com.netflix.spinnaker.orca.TaskResolver
+import com.netflix.spinnaker.orca.pipeline.model.Stage
 import com.netflix.spinnaker.orca.pipeline.persistence.ExecutionRepository
 import com.netflix.spinnaker.orca.q.ResumeTask
 import com.netflix.spinnaker.orca.q.RunTask
@@ -35,16 +36,35 @@ class ResumeTaskHandler(
   override val messageType = ResumeTask::class.java
 
   override fun handle(message: ResumeTask) {
-    message.withStage { stage ->
-      stage
-        .tasks
-        .filter { it.status == PAUSED }
-        .forEach {
-          it.status = RUNNING
-          queue.push(RunTask(message, it.type))
-        }
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  private fun handleLightweight(message: ResumeTask) {
+    message.withStageLightweight { stage ->
+      handleTasks(stage, message)
       repository.storeStage(stage)
     }
+  }
+
+  private fun handleNative(message: ResumeTask) {
+    message.withStage { stage ->
+      handleTasks(stage, message)
+      repository.storeStage(stage)
+    }
+  }
+
+  private fun handleTasks(stage: Stage, message: ResumeTask) {
+    stage
+      .tasks
+      .filter { it.status == PAUSED }
+      .forEach {
+        it.status = RUNNING
+        queue.push(RunTask(message, it.type))
+      }
   }
 
   @Suppress("UNCHECKED_CAST")

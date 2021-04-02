@@ -18,6 +18,7 @@ package com.netflix.spinnaker.orca.q.handler
 
 import com.netflix.spinnaker.orca.ExecutionStatus.PAUSED
 import com.netflix.spinnaker.orca.ExecutionStatus.RUNNING
+import com.netflix.spinnaker.orca.pipeline.model.Stage
 import com.netflix.spinnaker.orca.pipeline.persistence.ExecutionRepository
 import com.netflix.spinnaker.orca.q.ResumeStage
 import com.netflix.spinnaker.orca.q.ResumeTask
@@ -33,14 +34,33 @@ class ResumeStageHandler(
   override val messageType = ResumeStage::class.java
 
   override fun handle(message: ResumeStage) {
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  private fun handleLightweight(message: ResumeStage) {
+    message.withStageLightweight { stage ->
+      stage.status = RUNNING
+      repository.storeStage(stage)
+      handleTasks(stage, message)
+    }
+  }
+
+  private fun handleNative(message: ResumeStage) {
     message.withStage { stage ->
       stage.status = RUNNING
       repository.storeStage(stage)
-
-      stage
-        .tasks
-        .filter { it.status == PAUSED }
-        .forEach { queue.push(ResumeTask(message, it.id)) }
+      handleTasks(stage, message)
     }
+  }
+
+  private fun handleTasks(stage: Stage, message: ResumeStage) {
+    stage
+      .tasks
+      .filter { it.status == PAUSED }
+      .forEach { queue.push(ResumeTask(message, it.id)) }
   }
 }

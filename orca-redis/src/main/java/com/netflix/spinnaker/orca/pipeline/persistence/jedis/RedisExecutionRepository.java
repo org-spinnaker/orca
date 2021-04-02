@@ -327,9 +327,41 @@ public class RedisExecutionRepository implements ExecutionRepository {
 
   @Nonnull
   @Override
-  public Stage retrieveStageWithoutExecution(@Nonnull ExecutionType type, @Nonnull String id, @Nonnull String stageId) {
+  public Collection<Stage> retrieveAllStagesLightweight(@Nonnull ExecutionType type,
+                                                        @Nonnull String id) throws ExecutionNotFoundException {
     RedisClientDelegate delegate = getRedisDelegate(type, id);
-    return retrieveStageInternal(delegate, type, id, stageId);
+    String key = executionKey(type, id);
+    String indexKey = format("%s:stageIndex", key);
+
+    checkExecutionExisted(delegate, type, id, key);
+
+    final List<String> stageIds = new ArrayList<>();
+    delegate.withCommandsClient(
+        c -> {
+          stageIds.addAll(c.lrange(indexKey, 0, -1));
+        });
+    if (stageIds.isEmpty()) {
+      log.error("Stages are empty according to {}", indexKey);
+      return emptyList();
+    }
+
+    final Execution execution = retrieveInternalLightweight(delegate, type, id);
+    List<Stage> stages = new ArrayList<>();
+    for (String stageId : stageIds) {
+      final Stage stage = retrieveStageInternalLightweight(delegate, type, id, stageId);
+      stage.setExecution(execution);
+      stages.add(stage);
+    }
+    return stages;
+  }
+
+  @Nonnull
+  @Override
+  public Stage retrieveStageLightweight(@Nonnull ExecutionType type, @Nonnull String id, @Nonnull String stageId) {
+    RedisClientDelegate delegate = getRedisDelegate(type, id);
+    final Stage stage = retrieveStageInternal(delegate, type, id, stageId);
+    stage.setExecution(retrieveInternalLightweight(delegate, type, id));
+    return stage;
   }
 
   @Nonnull
@@ -966,6 +998,9 @@ public class RedisExecutionRepository implements ExecutionRepository {
       execution.setCanceledBy(map.get("canceledBy"));
       execution.setCancellationReason(map.get("cancellationReason"));
       execution.setLimitConcurrent(Boolean.parseBoolean(map.get("limitConcurrent")));
+      if (map.get("lightweight") != null) {
+        execution.setLightweight(Boolean.parseBoolean(map.get("lightweight")));
+      }
       execution.setBuildTime(NumberUtils.createLong(map.get("buildTime")));
       execution.setStartTime(NumberUtils.createLong(map.get("startTime")));
       if (map.get("startTimeExpiry") != null) {
@@ -1029,15 +1064,14 @@ public class RedisExecutionRepository implements ExecutionRepository {
   }
 
   /**
-   * Retrieve execution with just a few attributes, without stages.
+   * Retrieve execution with just a few attributes(lightweight/canceled/status/name/pipelineConfigId), without stages.
    *
    * @param execution
    * @param map
-   * @param stageIds
    * @return
    */
-  protected Execution buildExecutionLightweight(
-      @Nonnull Execution execution, @Nonnull Map<String, String> map, List<String> stageIds) {
+  protected Execution buildExecutionLightweight(@Nonnull Execution execution,
+                                                @Nonnull Map<String, String> map) {
     Id serializationErrorId =
         registry
             .createId("executions.deserialization.error")
@@ -1045,15 +1079,13 @@ public class RedisExecutionRepository implements ExecutionRepository {
             .withTag("application", execution.getApplication());
 
     try {
-      execution.setCanceled(Boolean.parseBoolean(map.get("canceled")));
-      execution.setLimitConcurrent(Boolean.parseBoolean(map.get("limitConcurrent")));
-      if (map.get("startTimeExpiry") != null) {
-        execution.setStartTimeExpiry(Long.valueOf(map.get("startTimeExpiry")));
+      if (map.get("lightweight") != null) {
+        execution.setLightweight(Boolean.parseBoolean(map.get("lightweight")));
       }
+      execution.setCanceled(Boolean.parseBoolean(map.get("canceled")));
       if (map.get("status") != null) {
         execution.setStatus(ExecutionStatus.valueOf(map.get("status")));
       }
-      execution.setKeepWaitingPipelines(Boolean.parseBoolean(map.get("keepWaitingPipelines")));
     } catch (Exception e) {
       registry.counter(serializationErrorId).increment();
       throw new ExecutionSerializationException(
@@ -1063,8 +1095,6 @@ public class RedisExecutionRepository implements ExecutionRepository {
     if (execution.getType() == PIPELINE) {
       execution.setName(map.get("name"));
       execution.setPipelineConfigId(map.get("pipelineConfigId"));
-    } else if (execution.getType() == ORCHESTRATION) {
-      execution.setDescription(map.get("description"));
     }
     return execution;
   }
@@ -1153,6 +1183,7 @@ public class RedisExecutionRepository implements ExecutionRepository {
     Map<String, String> map = new HashMap<>();
     try {
       map.put("application", execution.getApplication());
+      map.put("lightweight", String.valueOf(execution.isLightweight()));
       map.put("canceled", String.valueOf(execution.isCanceled()));
       map.put("limitConcurrent", String.valueOf(execution.isLimitConcurrent()));
       map.put(
@@ -1703,7 +1734,11 @@ public class RedisExecutionRepository implements ExecutionRepository {
     checkExecutionExisted(delegate, type, id, key);
 
     String keyDownstreamStageIds = format("stage.%s.downstreamStageIds", stageId);
-    return getUpstreamDownstreamStages(delegate, type, id, key, keyDownstreamStageIds);
+    final Collection<Stage> stages = getUpstreamDownstreamStages(delegate, type, id, key, keyDownstreamStageIds);
+    final Execution execution = retrieveInternalLightweight(delegate, type, id);
+    stages.forEach(stage -> stage.setExecution(execution));
+
+    return stages;
   }
 
   @NotNull
@@ -1718,14 +1753,14 @@ public class RedisExecutionRepository implements ExecutionRepository {
         });
     if (StringUtils.isNotEmpty(stageIds)) {
       return Arrays.stream(stageIds.split(","))
-          .map(stageId -> retrieveStageLightweightInternal(delegate, type, id, stageId))
+          .map(stageId -> retrieveStageInternalLightweight(delegate, type, id, stageId))
           .collect(Collectors.toList());
     }
     return Collections.emptyList();
   }
 
   /**
-   * lightweight Stage with just a few attributes, including: id, status and execution(type,id,application),
+   * stage with just three attributes: id, status, parentStageId, tasks. without execution
    *
    * @param delegate
    * @param type
@@ -1733,24 +1768,35 @@ public class RedisExecutionRepository implements ExecutionRepository {
    * @param stageId
    * @return
    */
-  private Stage retrieveStageLightweightInternal(RedisClientDelegate delegate,
+  private Stage retrieveStageInternalLightweight(RedisClientDelegate delegate,
                                                  ExecutionType type,
                                                  String id,
                                                  String stageId) {
     String key = executionKey(type, id);
-    checkExecutionExisted(delegate, type, id, key);
-
     String prefix = format("stage.%s.", stageId);
-    List<String> results = delegate.withCommandsClient(
+
+    final List<String> stageValues = delegate.withCommandsClient(
         c -> {
-          return c.hmget(key, prefix + "status", "application");
+          return c.hmget(key,
+              prefix + "status",
+              prefix + "parentStageId",
+              prefix + "tasks");
         });
+
     Stage stage = new Stage();
     stage.setId(stageId);
-    stage.setStatus(ExecutionStatus.valueOf(results.get(0)));
-    Execution execution = new Execution(type, id, results.get(1));
-    stage.setExecution(execution);
-
+    stage.setStatus(ExecutionStatus.valueOf(stageValues.get(0)));
+    stage.setParentStageId(stageValues.get(1));
+    try {
+      if (stageValues.get(2) != null) {
+        stage.setTasks(mapper.readValue(stageValues.get(2), LIST_OF_TASKS));
+      } else {
+        stage.setTasks(emptyList());
+      }
+    } catch (Exception e) {
+      final String errorMsg = format("Failed deserializing tasks json, executionId: %s, stageId: %s", id, stageId);
+      log.error(errorMsg, e);
+    }
     return stage;
   }
 
@@ -1816,7 +1862,7 @@ public class RedisExecutionRepository implements ExecutionRepository {
       stage.setRequisiteStageRefIds(emptySet());
     }
     stage.setScheduledTime(NumberUtils.createLong(stageValues.get(10)));
-    try{
+    try {
       if (stageValues.get(11) != null) {
         stage.setContext(mapper.readValue(stageValues.get(11), MAP_STRING_TO_OBJECT));
       } else {
@@ -1847,7 +1893,7 @@ public class RedisExecutionRepository implements ExecutionRepository {
               .withTag("application", application);
       registry.counter(serializationErrorId).increment();
       throw new ExecutionSerializationException(
-          String.format("Failed serializing execution json, id: %s", id), e);
+          String.format("Failed deserializing execution json, id: %s", id), e);
     }
     if (StringUtils.isNotEmpty(stageValues.get(15))) {
       stage.setRequisiteStageIds(Arrays.asList(stageValues.get(15).split(",")));
@@ -1865,29 +1911,6 @@ public class RedisExecutionRepository implements ExecutionRepository {
 
   protected Execution retrieveInternal(RedisClientDelegate delegate, ExecutionType type, String id)
       throws ExecutionNotFoundException {
-    ImmutablePair<Map<String, String>, List<String>> pair = fetchExecutionAndStageIds(delegate, type, id);
-    Execution execution = new Execution(type, id, pair.getLeft().get("application"));
-    return buildExecution(execution, pair.getLeft(), pair.getRight());
-  }
-
-  /**
-   * Retrieve execution with just a few attributes, without stages.
-   *
-   * @param delegate
-   * @param type
-   * @param id
-   * @return
-   * @throws ExecutionNotFoundException
-   */
-  protected Execution retrieveInternalLightweight(RedisClientDelegate delegate, ExecutionType type, String id)
-      throws ExecutionNotFoundException {
-    ImmutablePair<Map<String, String>, List<String>> pair = fetchExecutionAndStageIds(delegate, type, id);
-    Execution execution = new Execution(type, id, pair.getLeft().get("application"));
-    return buildExecutionLightweight(execution, pair.getLeft(), pair.getRight());
-  }
-
-  private ImmutablePair<Map<String, String>, List<String>> fetchExecutionAndStageIds(
-      RedisClientDelegate delegate, ExecutionType type, String id) throws ExecutionNotFoundException {
     String key = executionKey(type, id);
     String indexKey = format("%s:stageIndex", key);
 
@@ -1910,7 +1933,72 @@ public class RedisExecutionRepository implements ExecutionRepository {
             stageIds.addAll(extractStages(map));
           }
         });
-    return ImmutablePair.of(map, stageIds);
+
+    Execution execution = new Execution(type, id, map.get("application"));
+    return buildExecution(execution, map, stageIds);
+  }
+
+  /**
+   * Retrieve execution with just a few attributes(type/id/application/lightweight/canceled/status/name/pipelineConfigId), without stages.
+   *
+   * @param delegate
+   * @param type
+   * @param id
+   * @return
+   * @throws ExecutionNotFoundException
+   */
+  protected Execution retrieveInternalLightweight(RedisClientDelegate delegate, ExecutionType type, String id)
+      throws ExecutionNotFoundException {
+    String key = executionKey(type, id);
+
+    checkExecutionExisted(delegate, type, id, key);
+
+    final Map<String, String> map = retrieveInternalLightweight1(delegate, key);
+
+    Execution execution = new Execution(type, id, map.get("application"));
+    return buildExecutionLightweight(execution, map);
+  }
+
+  /**
+   * without get "stage.{stageId}.*"
+   * @param delegate
+   * @param key
+   * @return
+   */
+  @NotNull
+  private Map<String, String> retrieveInternalLightweight1(RedisClientDelegate delegate, String key) {
+    List<String> fields = new ArrayList<>();
+    fields.add("name");
+    fields.add("application");
+    fields.add("pipelineConfigId");
+    fields.add("status");
+    fields.add("lightweight");
+    fields.add("canceled");
+    fields.add("canceledBy");
+    fields.add("cancellationReason");
+    fields.add("buildTime");
+    fields.add("startTime");
+    fields.add("startTimeExpiry");
+    fields.add("endTime");
+    fields.add("paused");
+    fields.add("keepWaitingPipelines");
+    fields.add("origin");
+    fields.add("source");
+    fields.add("trigger");
+    fields.add("systemNotifications");
+    fields.add("notifications");
+    fields.add("initialConfig");
+    fields.add("description");
+    List<String> results = delegate.withCommandsClient(
+        c -> {
+          return c.hmget(key, fields.toArray(new String[0]));
+        });
+    final Map<String, String> map = new HashMap<>();
+    int i = 0;
+    for (String field : fields) {
+      map.put(field, results.get(i++));
+    }
+    return map;
   }
 
   private void checkExecutionExisted(RedisClientDelegate delegate, ExecutionType type, String id, String key) {

@@ -25,6 +25,7 @@ import com.netflix.spinnaker.orca.ExecutionStatus.REDIRECT
 import com.netflix.spinnaker.orca.ExecutionStatus.SUCCEEDED
 import com.netflix.spinnaker.orca.events.TaskComplete
 import com.netflix.spinnaker.orca.ext.isManuallySkipped
+import com.netflix.spinnaker.orca.ext.isManuallySkippedLightweight
 import com.netflix.spinnaker.orca.ext.nextTask
 import com.netflix.spinnaker.orca.pipeline.StageDefinitionBuilderFactory
 import com.netflix.spinnaker.orca.pipeline.model.Stage
@@ -57,6 +58,41 @@ class CompleteTaskHandler(
 ) : OrcaMessageHandler<CompleteTask>, ExpressionAware {
 
   override fun handle(message: CompleteTask) {
+    if (message.lightweight) {
+      handleLightweight(message)
+    } else {
+      handleNative(message)
+    }
+  }
+
+  private fun handleLightweight(message: CompleteTask) {
+    message.withTaskLightweight { stage, task ->
+      task.status = message.status
+      task.endTime = clock.millis()
+
+      if (message.status == REDIRECT) {
+        stage.handleRedirect(true)
+      } else {
+        repository.storeStage(stage)
+
+        if (stage.isManuallySkippedLightweight()) {
+          queue.push(SkipStage(stage.topLevelStage, true))
+        } else if (shouldCompleteStage(task, message.status, message.originalStatus)) {
+          queue.push(CompleteStage(message, true))
+        } else {
+          stage.nextTask(task).let {
+            if (it == null) {
+              queue.push(NoDownstreamTasks(message, true))
+            } else {
+              queue.push(StartTask(message, it.id, true))
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private fun handleNative(message: CompleteTask) {
     message.withTask { stage, task ->
       task.status = message.status
       task.endTime = clock.millis()
@@ -84,7 +120,7 @@ class CompleteTaskHandler(
 
         publisher.publishEvent(TaskComplete(this, mergedContextStage, task))
       }
-    }
+      }
   }
 
   fun shouldCompleteStage(task: Task, status: ExecutionStatus, originalStatus: ExecutionStatus?): Boolean {
@@ -104,7 +140,7 @@ class CompleteTaskHandler(
 
   override val messageType = CompleteTask::class.java
 
-  private fun Stage.handleRedirect() {
+  private fun Stage.handleRedirect(lightweight: Boolean = false) {
     tasks.let { tasks ->
       val start = tasks.indexOfFirst { it.isLoopStart }
       val end = tasks.indexOfLast { it.isLoopEnd }
@@ -113,7 +149,7 @@ class CompleteTaskHandler(
         it.status = NOT_STARTED
       }
       repository.storeStage(this)
-      queue.push(StartTask(execution.type, execution.id, execution.application, id, tasks[start].id))
+      queue.push(StartTask(execution.type, execution.id, execution.application, id, tasks[start].id, lightweight))
     }
   }
 
