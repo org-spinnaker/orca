@@ -366,6 +366,16 @@ public class Stage implements Serializable {
   private Collection<String> requisiteStageRefIds = emptySet();
   private Collection<String> requisiteStageIds = new HashSet<>();
   private Collection<String> downstreamStageIds = new HashSet<>();
+  /** the first stage which has no requisiteStageRefIds */
+  private boolean initial;
+
+  public boolean isInitial() {
+    return initial;
+  }
+
+  public void setInitial(boolean initial) {
+    this.initial = initial;
+  }
 
   public @Nonnull Collection<String> getDownstreamStageIds() {
     return ImmutableSet.copyOf(downstreamStageIds);

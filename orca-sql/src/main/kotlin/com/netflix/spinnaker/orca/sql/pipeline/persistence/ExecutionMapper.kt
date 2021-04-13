@@ -31,7 +31,8 @@ import java.sql.ResultSet
  */
 class ExecutionMapper(
   private val mapper: ObjectMapper,
-  private val stageBatchSize: Int
+  private val stageBatchSize: Int,
+  private val lightweight: Boolean = false
 ) {
 
   private val log = LoggerFactory.getLogger(javaClass)
@@ -55,6 +56,11 @@ class ExecutionMapper(
             executionMap[execution.id] = execution
           }
         }
+    }
+
+    // without stages
+    if (lightweight) {
+      return results
     }
 
     if (results.isNotEmpty()) {

@@ -1144,6 +1144,7 @@ public class RedisExecutionRepository implements ExecutionRepository {
             } else {
               stage.setDownstreamStageIds(emptySet());
             }
+            stage.setInitial(Boolean.parseBoolean(map.get(prefix + "initial")));
             stage.setScheduledTime(NumberUtils.createLong(map.get(prefix + "scheduledTime")));
             if (map.get(prefix + "context") != null) {
               stage.setContext(mapper.readValue(map.get(prefix + "context"), MAP_STRING_TO_OBJECT));
@@ -1302,6 +1303,7 @@ public class RedisExecutionRepository implements ExecutionRepository {
           prefix + "downstreamStageIds",
           stage.getDownstreamStageIds().stream().collect(Collectors.joining(",")));
     }
+    map.put(prefix + "initial", String.valueOf(CollectionUtils.isEmpty(stage.getRequisiteStageRefIds())));
     map.put(
         prefix + "scheduledTime",
         (stage.getScheduledTime() != null ? stage.getScheduledTime().toString() : null));
@@ -1837,7 +1839,8 @@ public class RedisExecutionRepository implements ExecutionRepository {
               prefix + "tasks",
               prefix + "lastModified",
               prefix + "requisiteStageIds",
-              prefix + "downstreamStageIds");
+              prefix + "downstreamStageIds",
+              prefix + "initial");
         });
 
     Stage stage = new Stage();
@@ -1905,6 +1908,7 @@ public class RedisExecutionRepository implements ExecutionRepository {
     } else {
       stage.setDownstreamStageIds(emptySet());
     }
+    stage.setInitial(Boolean.parseBoolean(stageValues.get(17)));
 
     return stage;
   }

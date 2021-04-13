@@ -1,0 +1,55 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20210413-update-orchestration-stages
+      author: yuanchaochao
+      changes:
+        - addColumn:
+            tableName: orchestration_stages
+            columns:
+              - column:
+                  name: initial
+                  type: boolean
+                  afterColumn: updated_at
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: requisite_stage_ids
+                  type: longtext
+                  afterColumn: initial
+              - column:
+                  name: downstream_stage_ids
+                  type: longtext
+                  afterColumn: requisite_stage_ids
+        - createIndex:
+            indexName: orchestrationstage_id_idx
+            tableName: orchestration_stages
+            columns:
+              - column:
+                  name: execution_id
+              - column:
+                  name: id
+        - createIndex:
+            indexName: orchestrationstage_initial_idx
+            tableName: orchestration_stages
+            columns:
+              - column:
+                  name: execution_id
+              - column:
+                  name: initial
+      rollback:
+        - dropColumn:
+            tableName: orchestration_stages
+            columnName: initial
+        - dropColumn:
+            tableName: orchestration_stages
+            columnName: requisite_stage_ids
+        - dropColumn:
+            tableName: orchestration_stages
+            columnName: downstream_stage_ids
+        - dropIndex:
+            tableName: orchestration_stages
+            indexName: orchestrationstage_id_idx
+        - dropIndex:
+            tableName: orchestration_stages
+            indexName: orchestrationstage_initial_idx

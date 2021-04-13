@@ -16,23 +16,16 @@
 package com.netflix.spinnaker.orca.sql.pipeline.persistence
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.netflix.spinnaker.kork.core.RetrySupport
 import com.netflix.spinnaker.kork.exceptions.ConfigurationException
 import com.netflix.spinnaker.kork.exceptions.SystemException
 import com.netflix.spinnaker.kork.sql.config.RetryProperties
 import com.netflix.spinnaker.kork.sql.routing.withPool
 import com.netflix.spinnaker.orca.ExecutionStatus
-import com.netflix.spinnaker.orca.ExecutionStatus.BUFFERED
-import com.netflix.spinnaker.orca.ExecutionStatus.CANCELED
-import com.netflix.spinnaker.orca.ExecutionStatus.NOT_STARTED
-import com.netflix.spinnaker.orca.ExecutionStatus.PAUSED
-import com.netflix.spinnaker.orca.ExecutionStatus.RUNNING
+import com.netflix.spinnaker.orca.ExecutionStatus.*
 import com.netflix.spinnaker.orca.interlink.Interlink
-import com.netflix.spinnaker.orca.interlink.events.PauseInterlinkEvent
-import com.netflix.spinnaker.orca.interlink.events.CancelInterlinkEvent
-import com.netflix.spinnaker.orca.interlink.events.DeleteInterlinkEvent
-import com.netflix.spinnaker.orca.interlink.events.InterlinkEvent
-import com.netflix.spinnaker.orca.interlink.events.ResumeInterlinkEvent
+import com.netflix.spinnaker.orca.interlink.events.*
 import com.netflix.spinnaker.orca.pipeline.model.Execution
 import com.netflix.spinnaker.orca.pipeline.model.Execution.ExecutionType
 import com.netflix.spinnaker.orca.pipeline.model.Execution.ExecutionType.ORCHESTRATION
@@ -42,34 +35,21 @@ import com.netflix.spinnaker.orca.pipeline.model.Stage
 import com.netflix.spinnaker.orca.pipeline.persistence.ExecutionNotFoundException
 import com.netflix.spinnaker.orca.pipeline.persistence.ExecutionRepository
 import com.netflix.spinnaker.orca.pipeline.persistence.ExecutionRepository.ExecutionComparator
-import com.netflix.spinnaker.orca.pipeline.persistence.ExecutionRepository.ExecutionComparator.BUILD_TIME_DESC
-import com.netflix.spinnaker.orca.pipeline.persistence.ExecutionRepository.ExecutionComparator.NATURAL_ASC
-import com.netflix.spinnaker.orca.pipeline.persistence.ExecutionRepository.ExecutionComparator.START_TIME_OR_ID
+import com.netflix.spinnaker.orca.pipeline.persistence.ExecutionRepository.ExecutionComparator.*
 import com.netflix.spinnaker.orca.pipeline.persistence.ExecutionRepository.ExecutionCriteria
 import com.netflix.spinnaker.orca.pipeline.persistence.UnpausablePipelineException
 import com.netflix.spinnaker.orca.pipeline.persistence.UnresumablePipelineException
 import de.huxhorn.sulky.ulid.SpinULID
-import org.jooq.DSLContext
-import org.jooq.Field
-import org.jooq.Record
-import org.jooq.SelectConditionStep
-import org.jooq.SelectConnectByStep
-import org.jooq.SelectForUpdateStep
-import org.jooq.SelectJoinStep
-import org.jooq.SelectWhereStep
-import org.jooq.Table
+import org.jooq.*
 import org.jooq.exception.SQLDialectNotSupportedException
+import org.jooq.exception.TooManyRowsException
 import org.jooq.impl.DSL
-import org.jooq.impl.DSL.count
-import org.jooq.impl.DSL.field
-import org.jooq.impl.DSL.name
-import org.jooq.impl.DSL.table
-import org.jooq.impl.DSL.value
+import org.jooq.impl.DSL.*
 import org.slf4j.LoggerFactory
 import rx.Observable
 import java.lang.System.currentTimeMillis
 import java.security.SecureRandom
-import org.jooq.exception.TooManyRowsException
+import java.sql.ResultSet
 
 /**
  * A generic SQL [ExecutionRepository].
@@ -293,24 +273,97 @@ class SqlExecutionRepository(
   }
 
   override fun retrieveAllStagesLightweight(type: ExecutionType, id: String): MutableCollection<Stage> {
-    TODO("Not yet implemented")
+    val results = mutableListOf<Stage>()
+    val executionLightweight = retrieveLightweight(type, id)
+    withPool(poolName) {
+      val rs = jooq.select(field("execution_id"), field("body"))
+        .from(type.stagesTableName)
+        .where(field("execution_id").equal(id))
+        .fetch()
+        .intoResultSet()
+      while (rs.next()) {
+        results.add(buildStageLightweight(rs, executionLightweight))
+      }
+      return results
+    }
   }
 
   override fun retrieveStageLightweight(type: ExecutionType, id: String, stageId: String): Stage {
-    TODO("Not yet implemented")
+    var stage = Stage()
+    val executionLightweight = retrieveLightweight(type, id)
+    withPool(poolName) {
+      val rs = jooq.select(field("execution_id"), field("body"))
+        .from(type.stagesTableName)
+        .where(field("execution_id").equal(id))
+        .and(field("id").equal(stageId))
+        .fetch()
+        .intoResultSet()
+      while (rs.next()) {
+        stage = buildStageLightweight(rs, executionLightweight)
+      }
+      return stage
+    }
   }
 
   override fun retrieveInitialStages(type: ExecutionType, id: String): MutableCollection<Stage> {
-    TODO("Not yet implemented")
+    val results = mutableListOf<Stage>()
+    val executionLightweight = retrieveLightweight(type, id)
+    withPool(poolName) {
+      val rs = jooq.select(field("execution_id"), field("body"))
+        .from(type.stagesTableName)
+        .where(field("execution_id").equal(id))
+        .and(field("initial").eq(true))
+        .fetch()
+        .intoResultSet()
+      while (rs.next()) {
+        results.add(buildStageLightweight(rs, executionLightweight))
+      }
+      return results
+    }
   }
 
   override fun retrieveUpstreamStages(type: ExecutionType, id: String, stageId: String): MutableCollection<Stage> {
-    TODO("Not yet implemented")
+    return retrieveUpstreamDownstreamStages(type, id, stageId, "requisite_stage_ids")
   }
 
   override fun retrieveDownstreamStages(type: ExecutionType, id: String, stageId: String): MutableCollection<Stage> {
-    TODO("Not yet implemented")
+    return retrieveUpstreamDownstreamStages(type, id, stageId, "downstream_stage_ids")
   }
+
+  private fun retrieveUpstreamDownstreamStages(type: ExecutionType, id: String, stageId: String, columnLabel: String): MutableCollection<Stage> {
+    val results = mutableListOf<Stage>()
+    val executionLightweight = retrieveLightweight(type, id)
+    withPool(poolName) {
+      val rs = jooq.select(field(columnLabel), field("body"))
+        .from(type.stagesTableName)
+        .where(field("execution_id").equal(id))
+        .and(field("id").equal(stageId))
+        .fetch()
+        .intoResultSet()
+      while (rs.next()) {
+        val stageIds = rs.getString(columnLabel).split(",")
+        if (stageIds.isEmpty()) {
+          continue
+        }
+        val stageResultSet = jooq.select(field("execution_id"), field("body"))
+          .from(type.stagesTableName)
+          .where(field("execution_id").equal(id))
+          .and(field("id").`in`(*stageIds.toTypedArray()))
+          .fetch()
+          .intoResultSet()
+        while (stageResultSet.next()) {
+          results.add(buildStageLightweight(stageResultSet, executionLightweight))
+        }
+      }
+      return results
+    }
+  }
+
+  private fun buildStageLightweight(rs: ResultSet, executionLightweight: Execution): Stage =
+    mapper.readValue<Stage>(rs.getString("body"))
+      .apply {
+        execution = executionLightweight
+      }
 
   // TODO rz - Refactor to not use exceptions. So weird.
   override fun retrieve(type: ExecutionType, id: String) =
@@ -318,7 +371,8 @@ class SqlExecutionRepository(
       ?: throw ExecutionNotFoundException("No $type found for $id")
 
   override fun retrieveLightweight(type: ExecutionType, id: String): Execution {
-    TODO("Not yet implemented")
+    return selectExecution(jooq, type, id, lightweight = true)
+      ?: throw ExecutionNotFoundException("No $type found for $id")
   }
 
   override fun retrieve(type: ExecutionType): Observable<Execution> =
@@ -410,7 +464,21 @@ class SqlExecutionRepository(
     pipelineConfigId: String,
     criteria: ExecutionCriteria
   ): Observable<Execution> {
-    TODO("Not yet implemented")
+    withPool(poolName) {
+      val select =
+        jooq.selectExecutions(
+          PIPELINE,
+          conditions = {
+            it.where(field("config_id").eq(pipelineConfigId))
+              .statusIn(criteria.statuses)
+          },
+          seek = {
+            it.orderBy(field("id").desc()).limit(criteria.pageSize)
+          }
+        )
+
+      return Observable.from(select.fetchExecutions(true))
+    }
   }
 
   override fun retrieveOrchestrationsForApplication(
@@ -857,6 +925,7 @@ class SqlExecutionRepository(
             }.execute()
         }
 
+        extractUpstreamDownstreamStages(stages)
         stages.forEach { storeStageInternal(ctx, it, executionId) }
       }
     } finally {
@@ -864,7 +933,34 @@ class SqlExecutionRepository(
     }
   }
 
+  private fun extractUpstreamDownstreamStages(stages: List<Stage>) {
+    // key->stage refId, value->stage id
+    val stageIdAndRefIdMap = stages.associate { it.refId to it.id }
+    // key->stage id, value->downstream stage ids
+    val downstreamStageIds = mutableMapOf<String, MutableList<String>>()
+    stages.forEach { stage ->
+      val requisiteStageRefIds = stage.requisiteStageRefIds
+      if (requisiteStageRefIds.isNotEmpty()) {
+        val requisiteStageIds = stageIdAndRefIdMap.filter { requisiteStageRefIds.contains(it.key) }.values
+        stage.requisiteStageIds = requisiteStageIds
+        requisiteStageIds.forEach {
+          if (downstreamStageIds.containsKey(it)) {
+            downstreamStageIds[it]?.add(stage.id)
+          } else {
+            val ids = mutableListOf<String>()
+            ids.add(stage.id)
+            downstreamStageIds[it] = ids
+          }
+        }
+      }
+    }
+    downstreamStageIds.forEach {
+      stages.find { stage -> stage.id == it.key }?.downstreamStageIds = it.value
+    }
+  }
+
   private fun storeStageInternal(ctx: DSLContext, stage: Stage, executionId: String? = null) {
+    stage.isInitial = stage.requisiteStageRefIds.isEmpty()
     /*
     ExecutionType.PIPELINE -> DSL.table("pipeline_stages")
     ExecutionType.ORCHESTRATION -> DSL.table("orchestration_stages")
@@ -887,6 +983,9 @@ class SqlExecutionRepository(
       field("execution_id") to executionUlid,
       field("status") to stage.status.toString(),
       field("updated_at") to currentTimeMillis(),
+      field("initial") to stage.isInitial,
+      field("requisite_stage_ids") to stage.requisiteStageIds.joinToString(","),
+      field("downstream_stage_ids") to stage.downstreamStageIds.joinToString(","),
       field("body") to body
     )
 
@@ -977,14 +1076,15 @@ class SqlExecutionRepository(
     ctx: DSLContext,
     type: ExecutionType,
     id: String,
-    forUpdate: Boolean = false
+    forUpdate: Boolean = false,
+    lightweight: Boolean = false
   ): Execution? {
     withPool(poolName) {
       val select = ctx.selectExecution(type).where(id.toWhereCondition())
       if (forUpdate) {
         select.forUpdate()
       }
-      return select.fetchExecution()
+      return select.fetchExecution(lightweight)
     }
   }
 
@@ -1059,11 +1159,11 @@ class SqlExecutionRepository(
   private fun selectFields() =
     listOf(field("id"), field("body"), field("`partition`"))
 
-  private fun SelectForUpdateStep<out Record>.fetchExecutions() =
-    ExecutionMapper(mapper, stageReadSize).map(fetch().intoResultSet(), jooq)
+  private fun SelectForUpdateStep<out Record>.fetchExecutions(lightweight: Boolean = false) =
+    ExecutionMapper(mapper, stageReadSize, lightweight).map(fetch().intoResultSet(), jooq)
 
-  private fun SelectForUpdateStep<out Record>.fetchExecution() =
-    fetchExecutions().firstOrNull()
+  private fun SelectForUpdateStep<out Record>.fetchExecution(lightweight: Boolean = false) =
+    fetchExecutions(lightweight).firstOrNull()
 
   private fun fetchExecutions(nextPage: (Int, String?) -> Iterable<Execution>) =
     object : Iterable<Execution> {

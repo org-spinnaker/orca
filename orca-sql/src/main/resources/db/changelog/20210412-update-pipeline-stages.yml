@@ -1,0 +1,55 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20210412-update-pipeline-stages
+      author: yuanchaochao
+      changes:
+        - addColumn:
+            tableName: pipeline_stages
+            columns:
+              - column:
+                  name: initial
+                  type: boolean
+                  afterColumn: updated_at
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: requisite_stage_ids
+                  type: longtext
+                  afterColumn: initial
+              - column:
+                  name: downstream_stage_ids
+                  type: longtext
+                  afterColumn: requisite_stage_ids
+        - createIndex:
+            indexName: pipelinestage_id_idx
+            tableName: pipeline_stages
+            columns:
+              - column:
+                  name: execution_id
+              - column:
+                  name: id
+        - createIndex:
+            indexName: pipelinestage_initial_idx
+            tableName: pipeline_stages
+            columns:
+              - column:
+                  name: execution_id
+              - column:
+                  name: initial
+      rollback:
+        - dropColumn:
+            tableName: pipeline_stages
+            columnName: initial
+        - dropColumn:
+            tableName: pipeline_stages
+            columnName: requisite_stage_ids
+        - dropColumn:
+            tableName: pipeline_stages
+            columnName: downstream_stage_ids
+        - dropIndex:
+            tableName: pipeline_stages
+            indexName: pipelinestage_id_idx
+        - dropIndex:
+            tableName: pipeline_stages
+            indexName: pipelinestage_initial_idx
