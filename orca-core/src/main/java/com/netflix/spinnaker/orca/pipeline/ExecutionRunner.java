@@ -27,6 +27,10 @@ public interface ExecutionRunner {
     throw new UnsupportedOperationException();
   }
 
+  default void restartTask(@Nonnull Execution execution, @Nonnull String stageId, @Nonnull String taskId) {
+    throw new UnsupportedOperationException();
+  }
+
   default void reschedule(@Nonnull Execution execution) {
     throw new UnsupportedOperationException();
   }

@@ -504,8 +504,20 @@ class TaskController {
   @RequestMapping(value = "/pipelines/{id}/stages/{stageId}/restart", method = RequestMethod.PUT)
   Execution retryPipelineStage(
     @PathVariable String id, @PathVariable String stageId) {
-    def pipeline = executionRepository.retrieve(PIPELINE, id)
+    def pipeline = executionRepository.retrieveLightweight(PIPELINE, id)
     executionRunner.restart(pipeline, stageId)
+    pipeline
+  }
+
+  @PreAuthorize("hasPermission(this.getPipeline(#id)?.application, 'APPLICATION', 'EXECUTE')")
+  @RequestMapping(value = "/pipelines/{id}/stages/{stageId}/tasks/{taskId}/restart", method = RequestMethod.PUT)
+  Execution retryStageTask(@PathVariable String id,
+                           @PathVariable String stageId,
+                           @PathVariable String taskId,
+                           @RequestBody Map restartDetails) {
+    log.info("Begin to retry stage task. executionId: ${id}, stageId: ${stageId}, taskId: ${taskId}, restartDetails: ${restartDetails}")
+    def pipeline = executionRepository.retrieveLightweight(PIPELINE, id)
+    executionRunner.restartTask(pipeline, stageId, taskId)
     pipeline
   }
 

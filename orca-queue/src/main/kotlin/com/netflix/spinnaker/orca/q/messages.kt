@@ -129,6 +129,20 @@ data class ResumeTask(
     this(message.executionType, message.executionId, message.application, message.stageId, taskId, message.lightweight)
 }
 
+@JsonTypeName("restartTask")
+data class RestartTask(
+  override val executionType: ExecutionType,
+  override val executionId: String,
+  override val application: String,
+  override val stageId: String,
+  override val taskId: String,
+  val user: String?,
+  override val lightweight: Boolean = false
+) : Message(), TaskLevel {
+  constructor(source: Execution, stageId: String, taskId: String, user: String?) :
+    this(source.type, source.id, source.application, stageId, taskId, user, source.isLightweight)
+}
+
 @JsonTypeName("runTask")
 data class RunTask(
   override val executionType: ExecutionType,
