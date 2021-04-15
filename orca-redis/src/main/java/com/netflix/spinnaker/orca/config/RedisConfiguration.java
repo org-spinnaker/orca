@@ -30,9 +30,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
+import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.JedisCluster;
 import rx.Scheduler;
+
+import java.net.URI;
+import java.util.HashSet;
+import java.util.Set;
 
 @Configuration
 @Import({JedisClientConfiguration.class, JedisConfiguration.class})
@@ -90,4 +98,23 @@ public class RedisConfiguration {
     config.setMinIdle(25);
     return config;
   }
+
+  @Primary
+  @Bean
+  @ConditionalOnProperty(value = "redis.cluster-enabled")
+  public JedisCluster queueRedisCluster(
+      @Value("${redis.cluster-connection:redis://localhost:6379}") String clusterConnection,
+      @Value("${redis.timeout:2000}") int timeout,
+      @Value("${redis.maxattempts:4}") int maxAttempts,
+      GenericObjectPoolConfig redisPoolConfig) {
+    Set<HostAndPort> clusterNodes = new HashSet<>();
+    // redis://10.101.120.14:11580,10.101.120.13:11581,10.101.74.9:11579
+    final String[] connections = URI.create(clusterConnection).getAuthority().split(",");
+    for (String connection : connections) {
+      final String[] hostAndPort = connection.split(":");
+      clusterNodes.add(new HostAndPort(hostAndPort[0], Integer.parseInt(hostAndPort[1])));
+    }
+    return new JedisCluster(clusterNodes, timeout, timeout, maxAttempts, null, redisPoolConfig);
+  }
+
 }

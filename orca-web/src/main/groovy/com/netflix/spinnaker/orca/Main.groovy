@@ -39,6 +39,7 @@ import com.netflix.spinnaker.orca.kayenta.config.KayentaConfiguration
 import com.netflix.spinnaker.orca.mine.config.MineConfiguration
 import com.netflix.spinnaker.orca.web.config.WebConfiguration
 import com.netflix.spinnaker.orca.webhook.config.WebhookConfiguration
+import groovy.util.logging.Slf4j
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration
 import org.springframework.boot.autoconfigure.groovy.template.GroovyTemplateAutoConfiguration
@@ -87,6 +88,7 @@ import org.springframework.scheduling.annotation.EnableAsync
 @ComponentScan([
   "com.netflix.spinnaker.config", "com.netflix.spinnaker.plugin"
 ])
+@Slf4j
 class Main extends SpringBootServletInitializer {
   static final Map<String, String> DEFAULT_PROPS = [
     'netflix.environment'              : 'test',
@@ -99,6 +101,16 @@ class Main extends SpringBootServletInitializer {
   ]
 
   static void main(String... args) {
+    //begin
+    def appEnv = System.getProperty("app.env")
+    def appLoc = System.getProperty("app.loc")
+    if (appEnv) {
+      System.setProperty("spring.profiles.active", System.getProperty("spring.profiles.active")
+          + "," + appEnv
+          + "," + appEnv + "-" + appLoc)
+    }
+    log.info("app.env={}，app.loc={}，spring.profiles.active={}", appEnv, appLoc, System.getProperty("spring.profiles.active"))
+    //end
     new SpringApplicationBuilder().properties(DEFAULT_PROPS).sources(Main).run(args)
   }
 

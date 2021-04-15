@@ -1,0 +1,108 @@
+<!--
+  ~ Copyright 2015 Netflix, Inc.
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License")
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~    http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<configuration>
+  <!--日志文件保存路径-->
+  <property name="LOG_HOME" value="/data/tomcat/logs/biz"/>
+  <!--日志文件保留天数-->
+  <property name="MAX_HISTORY" value="30"/>
+
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <!--格式化输出：%d表示日期，%m表示日志消息，%n是换行符-->
+      <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } --- [%15.15t] %-40.40logger{39} : [%X{X-SPINNAKER-USER}] %m%n
+      </pattern>
+    </encoder>
+  </appender>
+  <springProfile name="local">
+    <root level="INFO">
+      <appender-ref ref="CONSOLE"/>
+      <appender-ref ref="FILE"/>
+    </root>
+  </springProfile>
+
+  <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${LOG_HOME}/${app.name}.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+      <fileNamePattern>${LOG_HOME}/${app.name}.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+      <maxHistory>${MAX_HISTORY}</maxHistory>
+      <maxFileSize>50MB</maxFileSize>
+    </rollingPolicy>
+    <encoder>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } --- [%15.15t] %-40.40logger{39} : [%X{X-SPINNAKER-USER}] %m%n
+      </pattern>
+    </encoder>
+  </appender>
+  <springProfile name="dev">
+    <root level="INFO">
+      <appender-ref ref="FILE"/>
+    </root>
+  </springProfile>
+  <springProfile name="test">
+    <root level="INFO">
+      <appender-ref ref="FILE"/>
+    </root>
+  </springProfile>
+
+  <!--vivo log center's format-->
+  <appender name="FILE_JSON" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <FileNamePattern>${LOG_HOME}/vivo_biz_${app.name}.log.%d{yyyyMMddHH}</FileNamePattern>
+    </rollingPolicy>
+    <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+      <providers>
+        <mdc/>
+        <pattern>
+          <pattern>
+            {
+            "@timestamp": "%date{\"yyyy-MM-dd'T'HH:mm:ss.SSSXXX\", UTC}",
+            "source_host": "${HOSTNAME}",
+            "file": "%F",
+            "method":"%M",
+            "level":"%p",
+            "line_number":"%L",
+            "thread_name":"%t",
+            "@version":1,
+            "logger_name":"%logger",
+            "message":"%m",
+            "class":"%C",
+            "mdc":"%X"
+            }
+          </pattern>
+        </pattern>
+        <stackTrace>
+          <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+            <maxDepthPerThrowable>100</maxDepthPerThrowable>
+            <maxLength>20480</maxLength>
+            <rootCauseFirst>true</rootCauseFirst>
+          </throwableConverter>
+        </stackTrace>
+      </providers>
+    </encoder>
+  </appender>
+
+  <springProfile name="pre">
+    <root level="INFO">
+      <appender-ref ref="FILE_JSON"/>
+    </root>
+  </springProfile>
+  <springProfile name="prd">
+    <root level="INFO">
+      <appender-ref ref="FILE_JSON"/>
+    </root>
+  </springProfile>
+
+</configuration>

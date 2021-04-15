@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<included>
+  <!--日志文件保存路径-->
+  <property name="LOG_HOME" value="/data/${app.name}/logs/biz"/>
+  <!--日志文件保留天数-->
+  <property name="MAX_HISTORY" value="30"/>
+  <!--vivo log center's format-->
+  <appender name="FILE_JSON" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <FileNamePattern>${LOG_HOME}/vivo_biz_${app.name}.log.%d{yyyyMMddHH}</FileNamePattern>
+    </rollingPolicy>
+    <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+      <providers>
+        <mdc/>
+        <pattern>
+          <pattern>
+            {
+            "@timestamp": "%date{\"yyyy-MM-dd'T'HH:mm:ss.SSSXXX\", UTC}",
+            "source_host": "${HOSTNAME}",
+            "file": "%F",
+            "method":"%M",
+            "level":"%p",
+            "line_number":"%L",
+            "thread_name":"%t",
+            "@version":1,
+            "logger_name":"%logger",
+            "message":"%m",
+            "class":"%C",
+            "mdc":"%X"
+            }
+          </pattern>
+        </pattern>
+        <stackTrace>
+          <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+            <maxDepthPerThrowable>100</maxDepthPerThrowable>
+            <maxLength>20480</maxLength>
+            <rootCauseFirst>true</rootCauseFirst>
+          </throwableConverter>
+        </stackTrace>
+      </providers>
+    </encoder>
+  </appender>
+</included>

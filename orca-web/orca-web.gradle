@@ -16,6 +16,9 @@
 
 apply from: "$rootDir/gradle/groovy.gradle"
 apply plugin: 'spinnaker.application'
+//build executable fat jar
+apply plugin: 'org.springframework.boot'
+apply plugin: 'java'
 
 ext {
   springConfigLocation = System.getProperty('spring.config.additional-location', "${System.getProperty('user.home')}/.spinnaker/")
@@ -97,5 +100,12 @@ dependencies {
 test {
   useJUnitPlatform {
     includeEngines("junit-jupiter", "junit-vintage")
+  }
+}
+
+//build executable fat jar
+processResources {
+  from ('config/') {
+    into 'config'
   }
 }
