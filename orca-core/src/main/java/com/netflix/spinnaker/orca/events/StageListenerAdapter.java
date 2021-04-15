@@ -22,6 +22,7 @@ import com.netflix.spinnaker.orca.listeners.Persister;
 import com.netflix.spinnaker.orca.listeners.StageListener;
 import com.netflix.spinnaker.orca.pipeline.model.Execution;
 import com.netflix.spinnaker.orca.pipeline.model.Stage;
+import com.netflix.spinnaker.orca.pipeline.model.Task;
 import com.netflix.spinnaker.orca.pipeline.persistence.ExecutionRepository;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,25 +59,29 @@ public final class StageListenerAdapter implements ApplicationListener<Execution
   }
 
   private void onStageStarted(StageStarted event) {
-    Execution execution = retrieve(event);
+    /*Execution execution = retrieve(event);
     List<Stage> stages = execution.getStages();
     stages.stream()
         .filter(it -> it.getId().equals(event.getStageId()))
         .findFirst()
-        .ifPresent(stage -> delegate.beforeStage(persister, stage));
+        .ifPresent(stage -> delegate.beforeStage(persister, stage));*/
+    Stage stage = repository.retrieveStageLightweight(event.getExecutionType(), event.getExecutionId(), event.getStageId());
+    delegate.beforeStage(persister, stage);
   }
 
   private void onStageComplete(StageComplete event) {
-    Execution execution = retrieve(event);
+    /*Execution execution = retrieve(event);
     List<Stage> stages = execution.getStages();
     stages.stream()
         .filter(it -> it.getId().equals(event.getStageId()))
         .findFirst()
-        .ifPresent(stage -> delegate.afterStage(persister, stage));
+        .ifPresent(stage -> delegate.afterStage(persister, stage));*/
+    Stage stage = repository.retrieveStageLightweight(event.getExecutionType(), event.getExecutionId(), event.getStageId());
+    delegate.afterStage(persister, stage);
   }
 
   private void onTaskStarted(TaskStarted event) {
-    Execution execution = retrieve(event);
+    /*Execution execution = retrieve(event);
     List<Stage> stages = execution.getStages();
     stages.stream()
         .filter(it -> it.getId().equals(event.getStageId()))
@@ -89,11 +94,16 @@ public final class StageListenerAdapter implements ApplicationListener<Execution
                     stage.getTasks().stream()
                         .filter(it -> it.getId().equals(event.getTaskId()))
                         .findFirst()
-                        .get()));
+                        .get()));*/
+    Stage stage = repository.retrieveStageLightweight(event.getExecutionType(), event.getExecutionId(), event.getStageId());
+    delegate.beforeTask(
+        persister,
+        stage,
+        getTask(stage, event.getTaskId()));
   }
 
   private void onTaskComplete(TaskComplete event) {
-    Execution execution = retrieve(event);
+    /*Execution execution = retrieve(event);
     List<Stage> stages = execution.getStages();
     ExecutionStatus status = event.getStatus();
     stages.stream()
@@ -110,7 +120,23 @@ public final class StageListenerAdapter implements ApplicationListener<Execution
                         .get(),
                     status,
                     // TODO: not sure if status.isSuccessful covers all the weird cases here
-                    status.isSuccessful()));
+                    status.isSuccessful()));*/
+    Stage stage = repository.retrieveStageLightweight(event.getExecutionType(), event.getExecutionId(), event.getStageId());
+    ExecutionStatus status = event.getStatus();
+    delegate.afterTask(
+        persister,
+        stage,
+        getTask(stage, event.getTaskId()),
+        status,
+        status.isSuccessful());
+  }
+
+  private Task getTask(Stage stage, String taskId) {
+    return stage.getTasks()
+        .stream()
+        .filter(it -> it.getId().equals(taskId))
+        .findFirst()
+        .get();
   }
 
   private Execution retrieve(ExecutionEvent event) {

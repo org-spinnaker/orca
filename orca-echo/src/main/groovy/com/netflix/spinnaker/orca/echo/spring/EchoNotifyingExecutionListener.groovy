@@ -54,10 +54,12 @@ class EchoNotifyingExecutionListener implements ExecutionListener {
   void beforeExecution(Persister persister, Execution execution) {
     try {
       if (execution.status != ExecutionStatus.SUSPENDED) {
-        processSpelInNotifications(execution)
+        if (!execution.isLightweight()) {
+          processSpelInNotifications(execution)
 
-        if (execution.type == PIPELINE) {
-          addApplicationNotifications(execution)
+          if (execution.type == PIPELINE) {
+            addApplicationNotifications(execution)
+          }
         }
         AuthenticatedRequest.allowAnonymous({
           echoService.recordEvent(
@@ -66,7 +68,7 @@ class EchoNotifyingExecutionListener implements ExecutionListener {
               type       : "orca:${execution.type}:starting".toString(),
               application: execution.application,
             ],
-            content: buildContent(execution)
+            content: execution.isLightweight() ? buildContentLightweight(execution) : buildContent(execution)
           )
         })
       }
@@ -82,10 +84,12 @@ class EchoNotifyingExecutionListener implements ExecutionListener {
                       boolean wasSuccessful) {
     try {
       if (execution.status != ExecutionStatus.SUSPENDED) {
-        processSpelInNotifications(execution)
+        if (!execution.isLightweight()) {
+          processSpelInNotifications(execution)
 
-        if (execution.type == PIPELINE) {
-          addApplicationNotifications(execution)
+          if (execution.type == PIPELINE) {
+            addApplicationNotifications(execution)
+          }
         }
         AuthenticatedRequest.allowAnonymous({
           echoService.recordEvent(
@@ -94,7 +98,7 @@ class EchoNotifyingExecutionListener implements ExecutionListener {
               type       : "orca:${execution.type}:${wasSuccessful ? "complete" : "failed"}".toString(),
               application: execution.application,
             ],
-            content: buildContent(execution)
+            content: execution.isLightweight() ? buildContentLightweight(execution) : buildContent(execution)
           )
         })
       }
@@ -164,5 +168,12 @@ class EchoNotifyingExecutionListener implements ExecutionListener {
       [execution: execution] as Map<String, Object>,
       true
     )
+  }
+
+  private static Map<String, Object> buildContentLightweight(Execution execution) {
+    return [
+        execution  : execution,
+        executionId: execution.id
+    ] as Map<String, Object>
   }
 }

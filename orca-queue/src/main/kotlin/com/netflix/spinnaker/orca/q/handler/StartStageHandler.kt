@@ -107,9 +107,6 @@ class StartStageHandler(
               repository.storeStage(stage)
 
               stage.startLightweight()
-
-              publisher.publishEvent(StageStarted(this, stage))
-              trackResult(stage)
             } catch (e: Exception) {
               val exceptionDetails = exceptionHandlers.shouldRetry(e, stage.name)
               if (exceptionDetails?.shouldRetry == true) {

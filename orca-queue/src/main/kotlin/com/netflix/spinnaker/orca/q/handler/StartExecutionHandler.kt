@@ -103,7 +103,6 @@ class StartExecutionHandler(
     } else {
       repository.updateStatus(execution.type, execution.id, RUNNING)
       initialStages.forEach { queue.push(StartStage(it, true)) }
-      publisher.publishEvent(ExecutionStarted(this, execution.type, execution.id))
     }
   }
 

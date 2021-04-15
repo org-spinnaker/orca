@@ -63,6 +63,7 @@ public final class ExecutionListenerAdapter implements ApplicationListener<Execu
   }
 
   private Execution executionFor(ExecutionEvent event) {
-    return repository.retrieve(event.getExecutionType(), event.getExecutionId());
+//    return repository.retrieve(event.getExecutionType(), event.getExecutionId());
+    return repository.retrieveLightweight(event.getExecutionType(), event.getExecutionId());
   }
 }
